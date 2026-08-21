@@ -112,12 +112,26 @@ def _extract_sections(
     document: KnowledgeDocument,
 ) -> list[tuple[str | None, str]]:
     """
-    Return normalized document sections.
+    Extract sections from a KnowledgeDocument.
 
-    The current document model stores normalized content as one
-    text field, so the baseline treats the entire document as one
-    section.
+    Sections are processed according to their explicit order.
+    If no structured sections are available, the complete
+    document content is treated as one unsectioned block.
     """
+
+    if document.sections:
+        ordered_sections = sorted(
+            document.sections,
+            key=lambda section: section.order,
+        )
+
+        return [
+            (
+                section.title,
+                section.content,
+            )
+            for section in ordered_sections
+        ]
 
     return [
         (
@@ -125,7 +139,6 @@ def _extract_sections(
             document.content,
         )
     ]
-
 
 def chunk_document(
     document: KnowledgeDocument,

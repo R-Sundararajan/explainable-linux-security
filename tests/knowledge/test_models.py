@@ -5,6 +5,7 @@ from security_reasoning.knowledge.models import (
     DocumentFormat,
     KnowledgeChunk,
     KnowledgeDocument,
+    KnowledgeSection,
 )
 
 
@@ -21,6 +22,7 @@ def test_knowledge_document_valid():
     assert document.document_id == "doc-001"
     assert document.source_id == "mitre_attack"
     assert document.document_format == DocumentFormat.HTML
+    assert document.sections == []
 
 
 def test_knowledge_document_requires_content():
@@ -44,6 +46,79 @@ def test_knowledge_document_rejects_unknown_fields():
             document_format=DocumentFormat.HTML,
             unexpected_field="invalid",
         )
+
+
+def test_knowledge_section_valid():
+    section = KnowledgeSection(
+        section_id="section-001",
+        title="Detection",
+        content="Security detection guidance.",
+        order=0,
+    )
+
+    assert section.section_id == "section-001"
+    assert section.title == "Detection"
+    assert section.content == "Security detection guidance."
+    assert section.order == 0
+
+
+def test_knowledge_section_rejects_empty_content():
+    with pytest.raises(ValidationError):
+        KnowledgeSection(
+            section_id="section-001",
+            title="Detection",
+            content="",
+            order=0,
+        )
+
+
+def test_knowledge_section_rejects_negative_order():
+    with pytest.raises(ValidationError):
+        KnowledgeSection(
+            section_id="section-001",
+            title="Detection",
+            content="Security guidance.",
+            order=-1,
+        )
+
+
+def test_knowledge_section_rejects_unknown_fields():
+    with pytest.raises(ValidationError):
+        KnowledgeSection(
+            section_id="section-001",
+            title="Detection",
+            content="Security guidance.",
+            order=0,
+            unexpected_field="invalid",
+        )
+
+
+def test_knowledge_document_preserves_sections():
+    document = KnowledgeDocument(
+        document_id="doc-001",
+        source_id="mitre_attack",
+        title="Example Security Document",
+        content="Complete document content.",
+        document_format=DocumentFormat.TEXT,
+        sections=[
+            KnowledgeSection(
+                section_id="section-001",
+                title="Detection",
+                content="Detection guidance.",
+                order=0,
+            ),
+            KnowledgeSection(
+                section_id="section-002",
+                title="Mitigation",
+                content="Mitigation guidance.",
+                order=1,
+            ),
+        ],
+    )
+
+    assert len(document.sections) == 2
+    assert document.sections[0].title == "Detection"
+    assert document.sections[1].title == "Mitigation"
 
 
 def test_knowledge_chunk_valid():

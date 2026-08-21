@@ -14,6 +14,20 @@ class DocumentFormat(str, Enum):
     MARKDOWN = "markdown"
 
 
+class KnowledgeSection(BaseModel):
+    """
+    A semantically meaningful section of a normalized
+    knowledge document.
+    """
+
+    model_config = ConfigDict(extra="forbid")
+
+    section_id: str = Field(min_length=1)
+    title: str = Field(min_length=1)
+    content: str = Field(min_length=1)
+    order: int = Field(ge=0)
+
+
 class KnowledgeDocument(BaseModel):
     """
     Normalized representation of an acquired authoritative
@@ -41,6 +55,11 @@ class KnowledgeDocument(BaseModel):
     version: Optional[str] = None
 
     metadata: Dict[str, Any] = Field(default_factory=dict)
+
+    sections: list[KnowledgeSection] = Field(
+        default_factory=list
+    )
+
 
 class KnowledgeChunk(BaseModel):
     """

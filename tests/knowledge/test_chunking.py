@@ -5,6 +5,7 @@ from security_reasoning.knowledge.chunking import (
 from security_reasoning.knowledge.models import (
     DocumentFormat,
     KnowledgeDocument,
+    KnowledgeSection,
 )
 
 
@@ -148,3 +149,91 @@ def test_invalid_overlap_is_clamped():
     )
 
     assert config.effective_overlap == 199
+
+
+def test_chunker_preserves_document_sections():
+    document = KnowledgeDocument(
+        document_id="doc-sections",
+        source_id="mitre_attack",
+        title="Security Guidance",
+        content=(
+            "Detection guidance. "
+            "Mitigation guidance."
+        ),
+        document_format=DocumentFormat.TEXT,
+        sections=[
+            KnowledgeSection(
+                section_id="section-001",
+                title="Detection",
+                content="Detection guidance.",
+                order=0,
+            ),
+            KnowledgeSection(
+                section_id="section-002",
+                title="Mitigation",
+                content="Mitigation guidance.",
+                order=1,
+            ),
+        ],
+    )
+
+    chunks = chunk_document(document)
+
+    assert len(chunks) == 2
+
+    assert chunks[0].section == "Detection"
+    assert chunks[1].section == "Mitigation"
+
+
+def test_chunker_orders_sections_by_section_order():
+    document = KnowledgeDocument(
+        document_id="doc-order",
+        source_id="mitre_attack",
+        title="Security Guidance",
+        content="A B C",
+        document_format=DocumentFormat.TEXT,
+        sections=[
+            KnowledgeSection(
+                section_id="section-002",
+                title="Second",
+                content="B",
+                order=1,
+            ),
+            KnowledgeSection(
+                section_id="section-001",
+                title="First",
+                content="A",
+                order=0,
+            ),
+            KnowledgeSection(
+                section_id="section-003",
+                title="Third",
+                content="C",
+                order=2,
+            ),
+        ],
+    )
+
+    chunks = chunk_document(document)
+
+    assert [chunk.section for chunk in chunks] == [
+        "First",
+        "Second",
+        "Third",
+    ]
+
+
+def test_chunker_falls_back_to_document_content_without_sections():
+    document = KnowledgeDocument(
+        document_id="doc-no-sections",
+        source_id="mitre_attack",
+        title="Unstructured Document",
+        content="General security guidance.",
+        document_format=DocumentFormat.TEXT,
+    )
+
+    chunks = chunk_document(document)
+
+    assert len(chunks) == 1
+    assert chunks[0].section is None
+    assert chunks[0].content == "General security guidance."
