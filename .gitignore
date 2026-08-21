@@ -5,13 +5,8 @@
 __pycache__/
 *.py[cod]
 *$py.class
-<<<<<<< HEAD
 .pytest_cache/
 .venv/
-*.pyc 
-
-=======
->>>>>>> feature/security-reasoning-kb
 
 # Python packaging
 *.egg
