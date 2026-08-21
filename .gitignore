@@ -1,1 +1,174 @@
-.venv
+# ============================================================
+# Python
+# ============================================================
+
+__pycache__/
+*.py[cod]
+*$py.class
+
+# Python packaging
+*.egg
+*.egg-info/
+dist/
+build/
+wheels/
+
+# Virtual environments
+.venv/
+venv/
+env/
+ENV/
+
+# Test / coverage
+.pytest_cache/
+.coverage
+.coverage.*
+htmlcov/
+.tox/
+.nox/
+.mypy_cache/
+.pyre/
+.ruff_cache/
+
+# ============================================================
+# Environment / Secrets
+# ============================================================
+
+.env
+.env.*
+!.env.example
+
+# Local configuration
+*.local
+*.secret
+
+# ============================================================
+# IDE / Editors
+# ============================================================
+
+.vscode/*
+!.vscode/settings.json
+!.vscode/extensions.json
+
+.idea/
+*.swp
+*.swo
+*~
+
+# ============================================================
+# OS
+# ============================================================
+
+.DS_Store
+Thumbs.db
+
+# ============================================================
+# Logs
+# ============================================================
+
+*.log
+logs/
+
+# ============================================================
+# RAG / Knowledge Base
+# ============================================================
+
+# Downloaded source documents
+data/raw/
+data/downloads/
+
+# Processed / generated knowledge data
+data/processed/
+
+# Generated chunks
+data/chunks/
+
+# Embeddings
+data/embeddings/
+
+# Vector databases / indexes
+data/index/
+data/vectorstore/
+
+# Local retrieval caches
+data/cache/
+
+# ============================================================
+# ML / Model Artifacts
+# ============================================================
+
+models/
+checkpoints/
+*.pt
+*.pth
+*.bin
+*.safetensors
+*.onnx
+*.gguf
+
+# ============================================================
+# Hugging Face / ML caches
+# ============================================================
+
+.cache/
+cache/
+huggingface/
+.huggingface/
+
+
+# ============================================================
+# Benchmark Outputs
+# ============================================================
+
+benchmark_results/
+benchmarks/results/
+results/
+reports/generated/
+
+# Generated evaluation artifacts
+*.parquet
+
+# ============================================================
+# Temporary / Generated Files
+# ============================================================
+
+tmp/
+temp/
+*.tmp
+
+# ============================================================
+# Local runtime state
+# ============================================================
+
+runtime/
+run/
+pids/
+
+# ============================================================
+# Jupyter
+# ============================================================
+
+.ipynb_checkpoints/
+
+# ============================================================
+# SQLite / Local Databases
+# ============================================================
+
+*.db
+*.sqlite
+*.sqlite3
+
+# ============================================================
+# Build / Tooling
+# ============================================================
+
+.pytest_cache/
+.mypy_cache/
+.ruff_cache/
+
+# ============================================================
+# Project-specific generated artifacts
+# ============================================================
+
+artifacts/
+generated/
