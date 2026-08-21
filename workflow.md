@@ -387,6 +387,12 @@ remain necessary before a production overhead claim.
 make
 make test
 ```
+```text
+sudo ./anomaly_pipeline
+```
+```text
+Try running '/usr/bin/ip addr' multiple times and see it detect the PS as Anomaly!
+```
 
 The focused test executable covers normal/zero-duration/large-counter feature
 calculation, zero denominators, stale resources, first and stable temporal samples,
