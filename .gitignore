@@ -5,21 +5,6 @@
 __pycache__/
 *.py[cod]
 *$py.class
-.pytest_cache/
-.venv/
-
-# Python packaging
-*.egg
-*.egg-info/
-dist/
-build/
-wheels/
-
-# Virtual environments
-.venv/
-venv/
-env/
-ENV/
 
 # Test / coverage
 .pytest_cache/
@@ -31,6 +16,22 @@ htmlcov/
 .mypy_cache/
 .pyre/
 .ruff_cache/
+
+# Virtual environments
+.venv/
+venv/
+env/
+ENV/
+
+# ============================================================
+# Python Packaging
+# ============================================================
+
+*.egg
+*.egg-info/
+dist/
+build/
+wheels/
 
 # ============================================================
 # Environment / Secrets
@@ -109,7 +110,7 @@ checkpoints/
 *.gguf
 
 # ============================================================
-# Hugging Face / ML caches
+# Hugging Face / ML Caches
 # ============================================================
 
 .cache/
@@ -117,17 +118,23 @@ cache/
 huggingface/
 .huggingface/
 
-
 # ============================================================
 # Benchmark Outputs
 # ============================================================
 
+# Generated benchmark results
 benchmark_results/
 benchmarks/results/
 results/
+
+# Generated experiment artifacts
+benchmarks/**/results/
+benchmarks/**/artifacts/
+
+# Generated evaluation reports
 reports/generated/
 
-# Generated evaluation artifacts
+# Generated tabular evaluation artifacts
 *.parquet
 
 # ============================================================
@@ -139,7 +146,7 @@ temp/
 *.tmp
 
 # ============================================================
-# Local runtime state
+# Local Runtime State
 # ============================================================
 
 runtime/
@@ -161,15 +168,7 @@ pids/
 *.sqlite3
 
 # ============================================================
-# Build / Tooling
-# ============================================================
-
-.pytest_cache/
-.mypy_cache/
-.ruff_cache/
-
-# ============================================================
-# Project-specific generated artifacts
+# Project-specific Generated Artifacts
 # ============================================================
 
 artifacts/
