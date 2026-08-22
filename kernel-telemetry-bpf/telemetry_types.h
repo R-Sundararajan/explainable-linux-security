@@ -5,7 +5,6 @@
 #define TELEMETRY_PATH_LEN 192
 #define TELEMETRY_IPV6_LEN 16
 
-/* Keep this header free of libc/stdint includes so it can be shared with eBPF C. */
 
 enum telemetry_event_type {
     EVENT_PROCESS_EXEC = 1,

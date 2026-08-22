@@ -51,7 +51,31 @@ The machine-readable handoff is:
 /run/linux-security-assistant/telemetry.sock
 ```
 
-The collector emits one newline-delimited JSON host-window record every five seconds.
+The collector emits one or more newline-delimited JSON host-window records every
+five seconds. Each transport batch contains at most 20 process records so it
+remains compatible with the current Feature Engineering parser, but every
+meaningful process is emitted across the batches; 20 is not a per-window
+selection limit.
+
+Per-process `/proc` resource reads remain bounded to 64 attempts per window.
+An emitted process without a complete fresh CPU/memory/I/O sample has
+`"sampled_this_window": false` and `"resources": null`; missing measurements
+are never serialized as zero. `process_selection`, `process_batch`, and
+`data_quality` report tracked, meaningful, low-signal-filtered, sampled, and
+unsampled counts.
+
+The write tracepoint currently exposes the successful byte count but not the
+target path. Consequently, the collector conservatively treats every observed
+write as meaningful: a one-byte `/tmp` write and a one-byte write to a critical
+configuration file cannot safely be distinguished at this layer. Single
+create, delete, rename, network-state, UID, capability, and BPF-filtered syscall
+events are also retained at count one. This affects visibility only; anomaly
+judgment stays downstream. These low-volume events do not automatically consume
+priority resource-sampling capacity.
+
+`data_quality` distinguishes transport batching from filtering and resource
+freshness. It also reports `process_state_attribution_drops` when the bounded
+16,384-entry process-state table cannot attribute an event.
 
 Example:
 
@@ -135,7 +159,15 @@ with s.makefile("r") as f:
 PY
 ```
 
-You should then see one JSON record every five seconds.
+You should then see one or more JSON batch records every five seconds. Batches
+for the same host window share `window_start_ns` and `window_end_ns` and are
+identified by `process_batch.index` and `process_batch.count`.
+
+Run the process-coverage regression tests with:
+
+```bash
+make test
+```
 
 ## Current limitation
 

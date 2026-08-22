@@ -248,7 +248,6 @@ int on_inet_sock_state(struct trace_event_raw_inet_sock_set_state *ctx)
         bpf_ringbuf_discard(e, 0);
         return 0;
     } else {
-        /* IPv6 address fields remain zeroed in this prototype. */
     }
 
     bpf_ringbuf_submit(e, 0);
