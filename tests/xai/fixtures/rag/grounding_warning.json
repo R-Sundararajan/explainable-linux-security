@@ -1,0 +1,62 @@
+{
+  "schema_version": "1.0",
+  "request_id": "req-grounding-001",
+  "event_id": "evt-grounding-001",
+  "assessment": {
+    "status": "suspicious",
+    "summary": "The behavior appears suspicious, but grounding validation reported a problem."
+  },
+  "claims": [
+    {
+      "claim_id": "claim-grounding-001",
+      "text": "The observed process behavior may indicate unauthorized activity.",
+      "evidence_ids": [
+        "ev-301"
+      ],
+      "knowledge_ids": [
+        "kn-missing-301"
+      ]
+    }
+  ],
+  "security_relationships": [
+    {
+      "relationship": "unusual process behavior -> possible security concern",
+      "explanation": "The behavior differs from expected activity, but the supporting knowledge reference could not be validated.",
+      "evidence_ids": [
+        "ev-301"
+      ],
+      "knowledge_ids": [
+        "kn-missing-301"
+      ]
+    }
+  ],
+  "alternative_explanations": [
+    {
+      "explanation": "The behavior could have been caused by a legitimate administrative operation.",
+      "supporting_evidence_ids": [
+        "ev-302"
+      ]
+    }
+  ],
+  "unknowns": [
+    "The cause of the behavior cannot be established from the available evidence."
+  ],
+  "recommendations": [
+    "Collect additional evidence and validate the referenced knowledge source."
+  ],
+  "knowledge": [],
+  "limitations": [
+    "The referenced knowledge item is unavailable."
+  ],
+  "guardrail_status": {
+    "grounded": false,
+    "unsupported_claims": [
+      "claim-grounding-001"
+    ],
+    "citation_integrity": false,
+    "schema_valid": true
+  },
+  "reasoning_metadata": {
+    "retrieval_count": 0
+  }
+}

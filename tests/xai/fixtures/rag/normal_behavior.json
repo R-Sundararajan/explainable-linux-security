@@ -1,0 +1,65 @@
+{
+  "schema_version": "1.0",
+  "request_id": "req-normal-001",
+  "event_id": "evt-normal-001",
+  "assessment": {
+    "status": "normal",
+    "summary": "Observed behavior is consistent with the established baseline."
+  },
+  "claims": [
+    {
+      "claim_id": "claim-normal-001",
+      "text": "The observed process activity is consistent with normal system behavior.",
+      "evidence_ids": [
+        "ev-001",
+        "ev-002"
+      ],
+      "knowledge_ids": [
+        "kn-001"
+      ]
+    }
+  ],
+  "security_relationships": [
+    {
+      "relationship": "process activity -> normal baseline",
+      "explanation": "The observed process behavior matches the established behavioral pattern.",
+      "evidence_ids": [
+        "ev-001",
+        "ev-002"
+      ],
+      "knowledge_ids": [
+        "kn-001"
+      ]
+    }
+  ],
+  "alternative_explanations": [],
+  "unknowns": [],
+  "recommendations": [
+    "Continue normal monitoring."
+  ],
+  "knowledge": [
+    {
+      "knowledge_id": "kn-001",
+      "source": "security_knowledge_base",
+      "document_id": "doc-001",
+      "title": "Normal Linux Process Behavior",
+      "section": "Baseline Process Activity",
+      "content": "Processes that remain within established behavioral baselines are generally considered consistent with normal activity.",
+      "url": null,
+      "published_at": null,
+      "retrieved_at": "2026-08-22T15:00:00Z",
+      "relevance_score": 0.94,
+      "metadata": {}
+    }
+  ],
+  "limitations": [],
+  "guardrail_status": {
+    "grounded": true,
+    "unsupported_claims": [],
+    "citation_integrity": true,
+    "schema_valid": true
+  },
+  "reasoning_metadata": {
+    "retrieval_count": 1
+  }
+}

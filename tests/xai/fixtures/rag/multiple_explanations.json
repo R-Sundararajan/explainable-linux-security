@@ -1,0 +1,83 @@
+{
+  "schema_version": "1.0",
+  "request_id": "req-multiple-001",
+  "event_id": "evt-multiple-001",
+  "assessment": {
+    "status": "suspicious",
+    "summary": "The observed behavior has multiple plausible explanations."
+  },
+  "claims": [
+    {
+      "claim_id": "claim-multiple-001",
+      "text": "The observed network activity differs from the established baseline.",
+      "evidence_ids": [
+        "ev-201",
+        "ev-202"
+      ],
+      "knowledge_ids": [
+        "kn-201"
+      ]
+    }
+  ],
+  "security_relationships": [
+    {
+      "relationship": "network deviation -> investigation requirement",
+      "explanation": "The observed network pattern differs from the established baseline and therefore requires contextual investigation.",
+      "evidence_ids": [
+        "ev-201",
+        "ev-202"
+      ],
+      "knowledge_ids": [
+        "kn-201"
+      ]
+    }
+  ],
+  "alternative_explanations": [
+    {
+      "explanation": "The activity may represent legitimate software updating.",
+      "supporting_evidence_ids": [
+        "ev-203"
+      ]
+    },
+    {
+      "explanation": "The activity may represent an unauthorized process communicating with an external service.",
+      "supporting_evidence_ids": [
+        "ev-204"
+      ]
+    }
+  ],
+  "unknowns": [
+    "The available evidence is insufficient to determine which explanation is correct."
+  ],
+  "recommendations": [
+    "Correlate the network activity with process execution history.",
+    "Review the destination and timing of the observed connections."
+  ],
+  "knowledge": [
+    {
+      "knowledge_id": "kn-201",
+      "source": "security_knowledge_base",
+      "document_id": "doc-201",
+      "title": "Linux Network Behavior",
+      "section": "Unexpected Network Activity",
+      "content": "Unexpected network behavior should be evaluated together with process and system context.",
+      "url": null,
+      "published_at": null,
+      "retrieved_at": "2026-08-22T15:00:00Z",
+      "relevance_score": 0.91,
+      "metadata": {}
+    }
+  ],
+  "limitations": [
+    "The available evidence does not distinguish between the proposed explanations."
+  ],
+  "guardrail_status": {
+    "grounded": true,
+    "unsupported_claims": [],
+    "citation_integrity": true,
+    "schema_valid": true
+  },
+  "reasoning_metadata": {
+    "retrieval_count": 1
+  }
+}

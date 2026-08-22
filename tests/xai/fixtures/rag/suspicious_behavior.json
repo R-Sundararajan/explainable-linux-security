@@ -1,0 +1,88 @@
+{
+  "schema_version": "1.0",
+  "request_id": "req-suspicious-001",
+  "event_id": "evt-suspicious-001",
+  "assessment": {
+    "status": "suspicious",
+    "summary": "Observed behavior deviates from the established baseline and warrants investigation."
+  },
+  "claims": [
+    {
+      "claim_id": "claim-suspicious-001",
+      "text": "The observed process activity shows a significant deviation from the established behavioral baseline.",
+      "evidence_ids": [
+        "ev-101",
+        "ev-102"
+      ],
+      "knowledge_ids": [
+        "kn-101"
+      ]
+    },
+    {
+      "claim_id": "claim-suspicious-002",
+      "text": "The observed activity may require security investigation because the deviation is associated with an unusual process pattern.",
+      "evidence_ids": [
+        "ev-102",
+        "ev-103"
+      ],
+      "knowledge_ids": [
+        "kn-101"
+      ]
+    }
+  ],
+  "security_relationships": [
+    {
+      "relationship": "behavioral deviation -> security concern",
+      "explanation": "A substantial deviation from the established baseline can indicate behavior requiring further investigation.",
+      "evidence_ids": [
+        "ev-101",
+        "ev-102"
+      ],
+      "knowledge_ids": [
+        "kn-101"
+      ]
+    }
+  ],
+  "alternative_explanations": [
+    {
+      "explanation": "The deviation may also result from a legitimate administrative or maintenance operation.",
+      "supporting_evidence_ids": [
+        "ev-103"
+      ]
+    }
+  ],
+  "unknowns": [
+    "The intent of the process cannot be established from the available telemetry alone."
+  ],
+  "recommendations": [
+    "Inspect the process execution context.",
+    "Review related authentication and system activity."
+  ],
+  "knowledge": [
+    {
+      "knowledge_id": "kn-101",
+      "source": "security_knowledge_base",
+      "document_id": "doc-101",
+      "title": "Linux Behavioral Anomalies",
+      "section": "Process Behavior",
+      "content": "Significant deviations from an established behavioral baseline can warrant additional investigation.",
+      "url": null,
+      "published_at": null,
+      "retrieved_at": "2026-08-22T15:00:00Z",
+      "relevance_score": 0.97,
+      "metadata": {}
+    }
+  ],
+  "limitations": [
+    "The available telemetry does not establish the user's intent."
+  ],
+  "guardrail_status": {
+    "grounded": true,
+    "unsupported_claims": [],
+    "citation_integrity": true,
+    "schema_valid": true
+  },
+  "reasoning_metadata": {
+    "retrieval_count": 1
+  }
+}
