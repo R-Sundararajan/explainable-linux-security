@@ -134,6 +134,22 @@ static void retry_pause(void)
     }
 }
 
+static void report_connect_failure(const char *socket_path, int error_number)
+{
+    if (error_number == EACCES) {
+        (void)fprintf(stderr,
+                      "[WARN] telemetry socket access denied: %s. "
+                      "The user must be a member of linux-security; "
+                      "retrying.\n",
+                      socket_path);
+        return;
+    }
+    (void)fprintf(stderr,
+                  "[WARN] telemetry socket connect failed: %s: %s; "
+                  "retrying.\n",
+                  socket_path, strerror(error_number));
+}
+
 int main(int argc, char **argv)
 {
     const char *socket_path = argc > 1 ? argv[1] : TELEMETRY_SOCKET_PATH;
@@ -142,6 +158,8 @@ int main(int argc, char **argv)
     fe_config_t feature_config;
     baseline_config_t baseline_config;
     int exit_code = EXIT_SUCCESS;
+    int last_connect_error = 0;
+    bool connection_announced = false;
 
     memset(&pipeline, 0, sizeof(pipeline));
     signal(SIGINT, handle_signal);
@@ -168,11 +186,36 @@ int main(int argc, char **argv)
     while (!stopping) {
         int status;
         if (reader->fd < 0 && telemetry_reader_connect(reader) < 0) {
+            int connect_error = errno;
+            if (connect_error != last_connect_error)
+                report_connect_failure(socket_path, connect_error);
+            last_connect_error = connect_error;
             retry_pause();
             continue;
         }
+        if (!connection_announced) {
+            (void)fprintf(stderr, "anomaly pipeline: connected to %s\n",
+                          socket_path);
+            last_connect_error = 0;
+            connection_announced = true;
+        }
         status = telemetry_reader_pump(reader, process_window, &pipeline);
         if (status <= 0) {
+            if (!stopping) {
+                if (status == 0) {
+                    (void)fprintf(stderr,
+                                  "[WARN] telemetry socket disconnected: %s; "
+                                  "retrying.\n",
+                                  socket_path);
+                } else {
+                    int pump_error = errno;
+                    (void)fprintf(stderr,
+                                  "[WARN] telemetry socket read failed: %s: "
+                                  "%s; retrying.\n",
+                                  socket_path, strerror(pump_error));
+                }
+            }
+            connection_announced = false;
             telemetry_reader_close(reader);
             if (!stopping)
                 retry_pause();

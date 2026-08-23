@@ -58,7 +58,9 @@ static const char realistic_json[] =
     "\"net_state\":2,\"uid_change\":0,\"capset\":1},\"resources\":{"
     "\"cpu_utilization\":0.1,\"memory_bytes\":1048576,"
     "\"io_bytes_per_sec\":512.0}}],\"data_quality\":{"
-    "\"ringbuf_drops\":2,\"ipc_drops\":3,"
+    "\"ringbuf_drops\":2,\"ipc_drops\":3,\"ipc_no_consumer\":4,"
+    "\"ipc_backpressure_drops\":1,\"ipc_disconnect_drops\":1,"
+    "\"ipc_send_error_drops\":0,\"ipc_partial_write_drops\":1,"
     "\"process_records_emitted\":1,\"process_records_suppressed\":1}}";
 
 static void fill_window(fe_host_window_t *window, uint64_t start,

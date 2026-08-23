@@ -37,6 +37,33 @@ The collector is the Unix socket server. It calls one non-blocking `send()` for 
 complete newline-terminated JSON record and disconnects a client after a partial
 write so that an NDJSON stream is never silently spliced.
 
+## IPC privilege and loss model
+
+The collector branch originally created the socket as root and changed only its
+mode to `0660`. Ownership therefore remained `root:root`; an ordinary pipeline
+process that was not in that group received `EACCES` and silently retried. The
+collector-side patch at `patches/kernel-telemetry-ipc.patch` requires the
+deployment-managed `linux-security` group, secures the runtime directory as
+`root:linux-security` mode `2750`, and creates the socket as
+`root:linux-security` mode `0660`. The directory is setgid so recreated socket
+nodes inherit the intended group, and the collector also assigns the socket group
+explicitly. The C process does not create users or groups.
+
+`ipc_drops` remains in schema v2 for compatibility, but after the patch it counts
+only complete NDJSON records that were not delivered because of backpressure, a
+disconnect, another send error, or an unrecoverable partial write. Records produced
+while no client is connected are counted separately as `ipc_no_consumer`; this is
+an availability state, not evidence of socket-buffer exhaustion. The additive
+`ipc_backpressure_drops`, `ipc_disconnect_drops`, `ipc_send_error_drops`, and
+`ipc_partial_write_drops` fields explain the compatible aggregate. Existing readers
+ignore the additive fields safely.
+
+For a partial non-blocking stream write, the patched sender makes at most four
+immediate `send()` attempts. A completed record keeps the connection. If the
+bounded attempts cannot finish, the connection is closed so the consumer discards
+the incomplete final line at EOF; the next connection starts at an NDJSON record
+boundary. There is no queue, indefinite blocking, or unbounded allocation.
+
 The actual record has `schema_version: 2`, host/window identity, host `telemetry`,
 `process_selection`, a `processes` array, and `data_quality`. A process contains:
 

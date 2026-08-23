@@ -32,5 +32,26 @@ make test
 ./anomaly_pipeline
 ```
 
+The pipeline is intentionally unprivileged. Before starting the root collector,
+provision the access group once and add the intended consumer account (replace
+`kali` if needed):
+
+```bash
+sudo groupadd --system --force linux-security
+sudo usermod --append --groups linux-security kali
+```
+
+Log out and back in so the new supplementary group is present. The collector-side
+IPC patch in `patches/kernel-telemetry-ipc.patch` then enforces:
+
+```text
+/run/linux-security-assistant  root:linux-security  2750
+telemetry.sock                 root:linux-security  0660
+```
+
+Start only the collector with `sudo`; run `./anomaly_pipeline` as the ordinary
+group member. Do not use `sudo` for the pipeline and do not broaden the socket to
+world access.
+
 See [workflow.md](workflow.md) for the wire contract, feature definitions, exact
 weights, mathematical model, memory bounds, test results, and known limitations.
