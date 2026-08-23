@@ -10,6 +10,7 @@ from security_reasoning.rag.evaluation.metrics import (
     recall_at_k,
 )
 from security_reasoning.rag.retrieval import Retriever
+from security_reasoning.rag.retrieval import RetrievalResult
 from security_reasoning.rag.evaluation.cases import RetrievalCase
 
 class RetrievalBenchmark:
@@ -85,3 +86,21 @@ class RetrievalBenchmark:
                 sum(reciprocal_ranks) / case_count
             ),
         )
+
+    def retrieve_cases(
+    self,
+    k: int,
+) -> dict[str, Sequence[RetrievalResult]]:
+        """
+        Retrieve top-k results for every benchmark case.
+
+        Returns a mapping from case ID to ranked retrieval results.
+        """
+
+        return {
+            case.case_id: self._retriever.retrieve(
+                case.query,
+                k,
+            )
+            for case in self._cases
+        }

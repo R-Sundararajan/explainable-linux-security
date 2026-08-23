@@ -9,7 +9,7 @@ def test_benchmark_result_to_dict():
     result = BenchmarkResult(
         benchmark_name="baseline",
         retriever_name="reference_lexical",
-        dataset_name="security_retrieval_v1",
+        dataset_name="security_retrieval",
         case_count=4,
         k=5,
         hit_at_k=1.0,
@@ -29,7 +29,7 @@ def test_benchmark_result_to_json():
     result = BenchmarkResult(
         benchmark_name="baseline",
         retriever_name="reference_lexical",
-        dataset_name="security_retrieval_v1",
+        dataset_name="security_retrieval",
         case_count=4,
         k=1,
         hit_at_k=1.0,

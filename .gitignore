@@ -173,3 +173,6 @@ pids/
 
 artifacts/
 generated/
+
+# Generated benchmark corpus
+benchmarks/retrieval/datasets/mitre_attack_v19_1.json

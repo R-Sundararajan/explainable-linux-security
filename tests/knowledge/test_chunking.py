@@ -51,6 +51,7 @@ def test_long_document_is_split():
     chunks = chunk_document(document, config)
 
     assert len(chunks) > 1
+
     assert all(
         len(chunk.content) <= 200
         for chunk in chunks
@@ -104,8 +105,18 @@ def test_chunk_ids_are_deterministic():
 
 
 def test_chunks_preserve_document_provenance():
-    document = _make_document(
-        "Security information from an authoritative source."
+    document = KnowledgeDocument(
+        document_id="doc-001",
+        source_id="mitre_attack",
+        title="Example Security Document",
+        content=(
+            "Security information from an authoritative source."
+        ),
+        document_format=DocumentFormat.TEXT,
+        canonical_url="https://example.com/document",
+        version="1.0",
+        published_at="2026-01-01T00:00:00Z",
+        retrieved_at="2026-08-22T00:00:00Z",
     )
 
     chunks = chunk_document(document)
@@ -116,7 +127,39 @@ def test_chunks_preserve_document_provenance():
     assert chunks[0].canonical_url == (
         "https://example.com/document"
     )
+
     assert chunks[0].metadata["version"] == "1.0"
+
+
+def test_chunks_preserve_document_metadata():
+    document = KnowledgeDocument(
+        document_id="doc-metadata",
+        source_id="mitre_attack",
+        title="MITRE Security Knowledge",
+        content=(
+            "Authoritative MITRE security information."
+        ),
+        document_format=DocumentFormat.JSON,
+        metadata={
+            "source_format": "mitre_attack_stix",
+            "mitre_version": "19.1",
+            "object_type": "attack-pattern",
+        },
+    )
+
+    chunks = chunk_document(document)
+
+    assert len(chunks) == 1
+
+    assert chunks[0].metadata["source_format"] == (
+        "mitre_attack_stix"
+    )
+
+    assert chunks[0].metadata["mitre_version"] == "19.1"
+
+    assert chunks[0].metadata["object_type"] == (
+        "attack-pattern"
+    )
 
 
 def test_overlap_exists_between_long_chunks():
@@ -237,3 +280,21 @@ def test_chunker_falls_back_to_document_content_without_sections():
     assert len(chunks) == 1
     assert chunks[0].section is None
     assert chunks[0].content == "General security guidance."
+
+
+def test_chunks_preserve_entity_id():
+    document = KnowledgeDocument(
+        document_id="cisa:CVE-2021-36489",
+        entity_id="CVE-2021-36489",
+        source_id="cisa",
+        title="CISA Known Exploited Vulnerability",
+        content=(
+            "CVE-2021-36489 is a known exploited vulnerability."
+        ),
+        document_format=DocumentFormat.JSON,
+    )
+
+    chunks = chunk_document(document)
+
+    assert len(chunks) == 1
+    assert chunks[0].entity_id == "CVE-2021-36489"

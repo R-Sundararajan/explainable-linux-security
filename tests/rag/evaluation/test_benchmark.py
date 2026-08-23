@@ -3,9 +3,9 @@ from security_reasoning.rag.evaluation.benchmark import BenchmarkResult
 
 def test_benchmark_result_preserves_values():
     result = BenchmarkResult(
-        benchmark_name="retrieval_baseline_v1",
+        benchmark_name="retrieval_baseline",
         retriever_name="reference_lexical",
-        dataset_name="security_retrieval_v1",
+        dataset_name="security_retrieval",
         case_count=4,
         k=5,
         hit_at_k=1.0,
@@ -14,9 +14,9 @@ def test_benchmark_result_preserves_values():
         mean_reciprocal_rank=0.875,
     )
 
-    assert result.benchmark_name == "retrieval_baseline_v1"
+    assert result.benchmark_name == "retrieval_baseline"
     assert result.retriever_name == "reference_lexical"
-    assert result.dataset_name == "security_retrieval_v1"
+    assert result.dataset_name == "security_retrieval"
     assert result.case_count == 4
     assert result.k == 5
     assert result.hit_at_k == 1.0
@@ -27,9 +27,9 @@ def test_benchmark_result_preserves_values():
 
 def test_benchmark_result_is_immutable():
     result = BenchmarkResult(
-        benchmark_name="retrieval_baseline_v1",
+        benchmark_name="retrieval_baseline",
         retriever_name="reference_lexical",
-        dataset_name="security_retrieval_v1",
+        dataset_name="security_retrieval",
         case_count=4,
         k=5,
         hit_at_k=1.0,

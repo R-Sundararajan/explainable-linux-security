@@ -2,6 +2,20 @@ from __future__ import annotations
 
 from dataclasses import dataclass
 
+@dataclass(frozen=True)
+class CategoryBenchmarkResult:
+    """
+    Aggregate retrieval metrics for one evaluation category.
+    """
+
+    category: str
+    case_count: int
+
+    hit_at_k: float
+    recall_at_k: float
+    precision_at_k: float
+    mean_reciprocal_rank: float
+
 
 @dataclass(frozen=True)
 class BenchmarkResult:

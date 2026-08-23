@@ -10,12 +10,11 @@ from security_reasoning.rag.evaluation.serialization import (
 from security_reasoning.rag.index import InMemoryKnowledgeIndex
 from security_reasoning.rag.reference_retriever import ReferenceRetriever
 
-from benchmarks.retrieval.datasets.security_corpus_v1 import get_corpus
-from benchmarks.retrieval.datasets.security_retrieval_v1 import (
+from benchmarks.retrieval.datasets.security_corpus import get_corpus
+from benchmarks.retrieval.datasets.security_retrieval import (
     DATASET_NAME,
     get_cases,
 )
-
 
 RESULTS_DIR = Path(__file__).parent / "results"
 
@@ -32,7 +31,7 @@ def main() -> None:
     benchmark = RetrievalBenchmark(
         retriever=retriever,
         cases=get_cases(),
-        benchmark_name="reference_retrieval_baseline_v1",
+        benchmark_name="reference_retrieval_baseline",
         retriever_name="reference_lexical",
         dataset_name=DATASET_NAME,
     )
@@ -56,9 +55,8 @@ def main() -> None:
 
     output_path = (
         RESULTS_DIR
-        / "reference_lexical_security_retrieval_v1.json"
+        / "reference_lexical_security_retrieval.json"
     )
-
     payload = [
         benchmark_result_to_dict(result)
         for result in results

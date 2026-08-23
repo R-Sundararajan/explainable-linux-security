@@ -43,7 +43,9 @@ def _generate_knowledge_id(
         f"{document_id}|{chunk_index}|{content}"
     ).encode("utf-8")
 
-    digest = hashlib.sha256(payload).hexdigest()[:16]
+    digest = hashlib.sha256(
+        payload
+    ).hexdigest()[:16]
 
     return f"K-{digest}"
 
@@ -85,7 +87,11 @@ def _split_text(
         )
 
         if end < text_length:
-            boundary = text.rfind(" ", start, end)
+            boundary = text.rfind(
+                " ",
+                start,
+                end,
+            )
 
             if boundary > start:
                 end = boundary
@@ -140,12 +146,21 @@ def _extract_sections(
         )
     ]
 
+
 def chunk_document(
     document: KnowledgeDocument,
     config: ChunkingConfig | None = None,
 ) -> List[KnowledgeChunk]:
     """
     Convert a KnowledgeDocument into deterministic retrieval chunks.
+
+    Document metadata is propagated to every generated chunk so
+    provenance and source-specific information are not lost during
+    chunking.
+
+    The optional entity_id is also propagated directly to every
+    generated chunk so retrieval results retain their logical
+    security-entity association.
     """
 
     if config is None:
@@ -171,20 +186,26 @@ def chunk_document(
                 text,
             )
 
+            chunk_metadata = {
+                **document.metadata,
+                "document_format": (
+                    document.document_format.value
+                ),
+                "version": document.version,
+            }
+
             chunks.append(
                 KnowledgeChunk(
                     knowledge_id=knowledge_id,
                     document_id=document.document_id,
+                    entity_id=document.entity_id,
                     source_id=document.source_id,
                     title=document.title,
                     content=text,
                     chunk_index=chunk_index,
                     section=section_name,
                     canonical_url=document.canonical_url,
-                    metadata={
-                        "document_format": document.document_format.value,
-                        "version": document.version,
-                    },
+                    metadata=chunk_metadata,
                 )
             )
 

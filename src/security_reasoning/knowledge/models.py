@@ -32,11 +32,23 @@ class KnowledgeDocument(BaseModel):
     """
     Normalized representation of an acquired authoritative
     security document.
+
+    A KnowledgeDocument represents one source-specific
+    representation of a security knowledge entity.
+
+    `document_id` identifies the source-specific document.
+
+    `entity_id` optionally identifies the logical security
+    entity represented by the document, such as a CVE.
+    Multiple source documents may therefore share the same
+    entity_id while retaining distinct document_ids.
     """
 
     model_config = ConfigDict(extra="forbid")
 
     document_id: str = Field(min_length=1)
+
+    entity_id: Optional[str] = None
 
     source_id: str = Field(min_length=1)
 
@@ -64,6 +76,14 @@ class KnowledgeDocument(BaseModel):
 class KnowledgeChunk(BaseModel):
     """
     Retrieval-ready chunk derived from a KnowledgeDocument.
+
+    `knowledge_id` uniquely identifies the retrieval chunk.
+
+    `document_id` identifies the source-specific document from
+    which the chunk was produced.
+
+    `entity_id` optionally identifies the logical security entity
+    shared by multiple source documents, such as a CVE.
     """
 
     model_config = ConfigDict(extra="forbid")
@@ -71,6 +91,8 @@ class KnowledgeChunk(BaseModel):
     knowledge_id: str = Field(min_length=1)
 
     document_id: str = Field(min_length=1)
+
+    entity_id: Optional[str] = None
 
     source_id: str = Field(min_length=1)
 
