@@ -1,5 +1,5 @@
 diff --git a/kernel-telemetry-bpf/README.md b/kernel-telemetry-bpf/README.md
-index 7bddfd8..82f22e7 100644
+index 7bddfd8..78d01ce 100644
 --- a/kernel-telemetry-bpf/README.md
 +++ b/kernel-telemetry-bpf/README.md
 @@ -12,6 +12,18 @@ make
@@ -21,11 +21,11 @@ index 7bddfd8..82f22e7 100644
  ```bash
  sudo ./telemetry
  ```
-@@ -115,10 +127,17 @@ Example:
+@@ -115,10 +127,19 @@ Example:
  ## Socket behavior
  
  - Unix Domain Socket: `/run/linux-security-assistant/telemetry.sock`
-+- Runtime directory: `root:linux-security`, mode `2750` (setgid)
++- Runtime directory: `root:linux-security`, mode `0750`
 +- Socket: `root:linux-security`, mode `0660`
  - Newline-delimited JSON records
  - Non-blocking downstream send
@@ -35,12 +35,14 @@ index 7bddfd8..82f22e7 100644
 +- `ipc_drops` counts records lost during an established transport attempt
 +- `ipc_backpressure_drops`, `ipc_disconnect_drops`, `ipc_send_error_drops`, and
 +  `ipc_partial_write_drops` explain the compatible `ipc_drops` aggregate
++- Exactly one active consumer is supported; additional queued clients are closed,
++  logged with their peer credentials, and counted in `ipc_rejected_clients`
 +- A partial write gets at most four immediate non-blocking attempts; an
 +  unfinished record closes the connection so EOF preserves NDJSON framing
  - The collector removes the socket on clean shutdown
  
  ## Important architecture boundary
-@@ -142,7 +161,8 @@ Start the collector:
+@@ -142,7 +163,8 @@ Start the collector:
  sudo ./telemetry
  ```
  
@@ -51,7 +53,7 @@ index 7bddfd8..82f22e7 100644
  ```bash
  python3 - <<'PY'
 diff --git a/kernel-telemetry-bpf/telemetry.c b/kernel-telemetry-bpf/telemetry.c
-index 92ee9b2..33deeca 100644
+index 92ee9b2..e5c5caa 100644
 --- a/kernel-telemetry-bpf/telemetry.c
 +++ b/kernel-telemetry-bpf/telemetry.c
 @@ -21,9 +21,9 @@
@@ -73,12 +75,12 @@ index 92ee9b2..33deeca 100644
 -    printf("[WINDOW] exec=%llu exit=%llu syscall=%llu file_write_events=%llu file_write_bytes=%llu file_create=%llu file_delete=%llu rename=%llu net_state=%llu uid_change=%llu capset=%llu ringbuf_drops=%llu ipc_drops=%llu process_state_attribution_drops=%llu\n",
 -        counters.process_exec, counters.process_exit, counters.syscall_events, counters.file_write_events, counters.file_write_bytes, counters.file_create, counters.file_delete, counters.file_rename, counters.net_state, counters.uid_change, counters.capset, drops_delta, ipc_drops_delta, process_state_attribution_drops);
 +static void print_window_summary(unsigned long long drops_delta, const struct telemetry_socket_stats *ipc) {
-+    printf("[WINDOW] exec=%llu exit=%llu syscall=%llu file_write_events=%llu file_write_bytes=%llu file_create=%llu file_delete=%llu rename=%llu net_state=%llu uid_change=%llu capset=%llu ringbuf_drops=%llu ipc_drops=%llu ipc_no_consumer=%llu ipc_backpressure_drops=%llu ipc_disconnect_drops=%llu ipc_send_error_drops=%llu ipc_partial_write_drops=%llu process_state_attribution_drops=%llu\n",
-+        counters.process_exec, counters.process_exit, counters.syscall_events, counters.file_write_events, counters.file_write_bytes, counters.file_create, counters.file_delete, counters.file_rename, counters.net_state, counters.uid_change, counters.capset, drops_delta, ipc->drops, ipc->no_consumer, ipc->backpressure_drops, ipc->disconnect_drops, ipc->send_error_drops, ipc->partial_write_drops, process_state_attribution_drops);
++    printf("[WINDOW] exec=%llu exit=%llu syscall=%llu file_write_events=%llu file_write_bytes=%llu file_create=%llu file_delete=%llu rename=%llu net_state=%llu uid_change=%llu capset=%llu ringbuf_drops=%llu ipc_drops=%llu ipc_no_consumer=%llu ipc_backpressure_drops=%llu ipc_disconnect_drops=%llu ipc_send_error_drops=%llu ipc_partial_write_drops=%llu ipc_rejected_clients=%llu process_state_attribution_drops=%llu\n",
++        counters.process_exec, counters.process_exit, counters.syscall_events, counters.file_write_events, counters.file_write_bytes, counters.file_create, counters.file_delete, counters.file_rename, counters.net_state, counters.uid_change, counters.capset, drops_delta, ipc->drops, ipc->no_consumer, ipc->backpressure_drops, ipc->disconnect_drops, ipc->send_error_drops, ipc->partial_write_drops, ipc->rejected_clients, process_state_attribution_drops);
      memset(&counters, 0, sizeof(counters));
      process_state_attribution_drops = 0;
  }
-@@ -899,8 +899,23 @@ static void prepare_process_output(struct process_output_stats *stats) {
+@@ -899,8 +899,24 @@ static void prepare_process_output(struct process_output_stats *stats) {
      collect_process_output_stats(stats);
  }
  
@@ -96,6 +98,7 @@ index 92ee9b2..33deeca 100644
 +    delta->disconnect_drops = counter_delta(current->disconnect_drops, previous->disconnect_drops);
 +    delta->send_error_drops = counter_delta(current->send_error_drops, previous->send_error_drops);
 +    delta->partial_write_drops = counter_delta(current->partial_write_drops, previous->partial_write_drops);
++    delta->rejected_clients = counter_delta(current->rejected_clients, previous->rejected_clients);
 +}
 +#endif
 +
@@ -104,16 +107,16 @@ index 92ee9b2..33deeca 100644
          batch_index >= stats->batch_count) return -1;
      size_t used = 0;
      unsigned long long batch_start =
-@@ -935,7 +950,7 @@ static int build_host_window_json_batch(char *out, size_t out_sz, const char *ho
+@@ -935,7 +951,7 @@ static int build_host_window_json_batch(char *out, size_t out_sz, const char *ho
          selected_index++;
      }
  
 -    if (append_json(out, out_sz, &used, "],\"data_quality\":{\"ringbuf_drops\":%llu,\"ipc_drops\":%llu,\"process_state_attribution_drops\":%llu,\"tracked_processes\":%llu,\"meaningful_processes\":%llu,\"process_records_emitted\":%llu,\"window_process_records_emitted\":%llu,\"process_records_suppressed\":0,\"process_records_filtered_low_signal\":%llu,\"transport_batches\":%llu,\"resource_samples_attempted\":%llu,\"resource_sampled_processes\":%llu,\"resource_unsampled_processes\":%llu}}\n", drops_delta, ipc_drops_delta, process_state_attribution_drops, stats->tracked_processes, stats->meaningful_processes, batch_records, stats->meaningful_processes, stats->low_signal_filtered, stats->batch_count, stats->resource_samples_attempted, stats->resource_samples_fresh, stats->records_without_fresh_resources) < 0) return -1;
-+    if (append_json(out, out_sz, &used, "],\"data_quality\":{\"ringbuf_drops\":%llu,\"ipc_drops\":%llu,\"ipc_no_consumer\":%llu,\"ipc_backpressure_drops\":%llu,\"ipc_disconnect_drops\":%llu,\"ipc_send_error_drops\":%llu,\"ipc_partial_write_drops\":%llu,\"process_state_attribution_drops\":%llu,\"tracked_processes\":%llu,\"meaningful_processes\":%llu,\"process_records_emitted\":%llu,\"window_process_records_emitted\":%llu,\"process_records_suppressed\":0,\"process_records_filtered_low_signal\":%llu,\"transport_batches\":%llu,\"resource_samples_attempted\":%llu,\"resource_sampled_processes\":%llu,\"resource_unsampled_processes\":%llu}}\n", drops_delta, ipc->drops, ipc->no_consumer, ipc->backpressure_drops, ipc->disconnect_drops, ipc->send_error_drops, ipc->partial_write_drops, process_state_attribution_drops, stats->tracked_processes, stats->meaningful_processes, batch_records, stats->meaningful_processes, stats->low_signal_filtered, stats->batch_count, stats->resource_samples_attempted, stats->resource_samples_fresh, stats->records_without_fresh_resources) < 0) return -1;
++    if (append_json(out, out_sz, &used, "],\"data_quality\":{\"ringbuf_drops\":%llu,\"ipc_drops\":%llu,\"ipc_no_consumer\":%llu,\"ipc_backpressure_drops\":%llu,\"ipc_disconnect_drops\":%llu,\"ipc_send_error_drops\":%llu,\"ipc_partial_write_drops\":%llu,\"ipc_rejected_clients\":%llu,\"process_state_attribution_drops\":%llu,\"tracked_processes\":%llu,\"meaningful_processes\":%llu,\"process_records_emitted\":%llu,\"window_process_records_emitted\":%llu,\"process_records_suppressed\":0,\"process_records_filtered_low_signal\":%llu,\"transport_batches\":%llu,\"resource_samples_attempted\":%llu,\"resource_sampled_processes\":%llu,\"resource_unsampled_processes\":%llu}}\n", drops_delta, ipc->drops, ipc->no_consumer, ipc->backpressure_drops, ipc->disconnect_drops, ipc->send_error_drops, ipc->partial_write_drops, ipc->rejected_clients, process_state_attribution_drops, stats->tracked_processes, stats->meaningful_processes, batch_records, stats->meaningful_processes, stats->low_signal_filtered, stats->batch_count, stats->resource_samples_attempted, stats->resource_samples_fresh, stats->records_without_fresh_resources) < 0) return -1;
      return 0;
  }
  
-@@ -947,6 +962,7 @@ int main(void) {
+@@ -947,6 +963,7 @@ int main(void) {
      char host_id[128] = {0};
      char *json = NULL;
      struct process_output_stats output_stats;
@@ -121,7 +124,7 @@ index 92ee9b2..33deeca 100644
  
      signal(SIGINT, sig_handler);
      signal(SIGTERM, sig_handler);
-@@ -981,7 +997,7 @@ int main(void) {
+@@ -981,7 +998,7 @@ int main(void) {
      unsigned long long last_sample = monotonic_ns();
      unsigned long long last_window = last_sample;
      unsigned long long last_drops = read_ringbuf_drops(skel);
@@ -130,7 +133,7 @@ index 92ee9b2..33deeca 100644
  
      while (!exiting) {
          int poll_rc = ring_buffer__poll(rb, 250);
-@@ -991,8 +1007,11 @@ int main(void) {
+@@ -991,8 +1008,11 @@ int main(void) {
          if (now - last_window >= 5000000000ULL) {
              unsigned long long drops = read_ringbuf_drops(skel);
              unsigned long long drop_delta = drops >= last_drops ? drops - last_drops : 0;
@@ -144,7 +147,7 @@ index 92ee9b2..33deeca 100644
              unsigned long long window_start = last_window;
              unsigned long long window_end = now;
              prepare_process_output(&output_stats);
-@@ -1000,7 +1019,7 @@ int main(void) {
+@@ -1000,7 +1020,7 @@ int main(void) {
                   batch < output_stats.batch_count; batch++) {
                  if (build_host_window_json_batch(json, JSON_BUFFER_SIZE,
                          host_id, window_start, window_end, drop_delta,
@@ -153,7 +156,7 @@ index 92ee9b2..33deeca 100644
                      fprintf(stderr,
                              "[WARN] failed to serialize telemetry window batch %llu/%llu\n",
                              batch + 1, output_stats.batch_count);
-@@ -1008,9 +1027,11 @@ int main(void) {
+@@ -1008,9 +1028,11 @@ int main(void) {
                  }
                  telemetry_socket_send(json, strlen(json));
              }
@@ -168,10 +171,10 @@ index 92ee9b2..33deeca 100644
      }
      printf("Stopping collector...\n");
 diff --git a/kernel-telemetry-bpf/telemetry_socket.c b/kernel-telemetry-bpf/telemetry_socket.c
-index cb1fc7f..0a616b6 100644
+index cb1fc7f..6b3cb2d 100644
 --- a/kernel-telemetry-bpf/telemetry_socket.c
 +++ b/kernel-telemetry-bpf/telemetry_socket.c
-@@ -1,93 +1,279 @@
+@@ -1,93 +1,321 @@
  #define _GNU_SOURCE
  #include "telemetry_socket.h"
 -#include <sys/socket.h>
@@ -235,7 +238,7 @@ index cb1fc7f..0a616b6 100644
 +                    "[FATAL] required group '%s' does not exist\n",
 +                    TELEMETRY_SOCKET_GROUP);
 +        return -1;
-+    }
+     }
 +    *gid = group->gr_gid;
 +    return 0;
 +}
@@ -262,7 +265,7 @@ index cb1fc7f..0a616b6 100644
 +        perror("chown(" TELEMETRY_RUNTIME_DIR ")");
 +        return -1;
 +    }
-+    if (chmod(TELEMETRY_RUNTIME_DIR, 02750) < 0) {
++    if (chmod(TELEMETRY_RUNTIME_DIR, 0750) < 0) {
 +        perror("chmod(" TELEMETRY_RUNTIME_DIR ")");
 +        return -1;
 +    }
@@ -280,7 +283,7 @@ index cb1fc7f..0a616b6 100644
 +                TELEMETRY_SOCKET_PATH);
 +        errno = EEXIST;
 +        return -1;
-     }
++    }
 +    return unlink(TELEMETRY_SOCKET_PATH);
 +}
 +
@@ -364,30 +367,88 @@ index cb1fc7f..0a616b6 100644
 -static void accept_client_if_needed(void) {
 -    if (server_fd < 0 || client_fd >= 0) return;
 -    int fd = accept(server_fd, NULL, NULL);
-+static void accept_client_if_needed(void)
-+{
-+    int fd;
-+
-+    if (server_fd < 0 || client_fd >= 0)
-+        return;
-+    fd = accept(server_fd, NULL, NULL);
-     if (fd < 0) {
+-    if (fd < 0) {
 -        if (errno != EAGAIN && errno != EWOULDBLOCK && errno != EINTR) perror("accept(telemetry.sock)");
-+        if (errno != EAGAIN && errno != EWOULDBLOCK && errno != EINTR)
-+            perror("accept(telemetry.sock)");
-+        return;
++static void log_peer(const char *action, int fd)
++{
++    struct ucred credentials;
++    socklen_t length = sizeof(credentials);
++
++    if (getsockopt(fd, SOL_SOCKET, SO_PEERCRED, &credentials, &length) == 0) {
++        fprintf(stderr,
++                "Feature Engineering client %s: pid=%ld uid=%lu gid=%lu\n",
++                action, (long)credentials.pid, (unsigned long)credentials.uid,
++                (unsigned long)credentials.gid);
++    } else {
++        fprintf(stderr, "Feature Engineering client %s\n", action);
 +    }
-+    if (make_nonblocking(fd) < 0) {
-+        close(fd);
++}
++
++static void discard_closed_client(void)
++{
++    char byte;
++    ssize_t rc;
++
++    if (client_fd < 0)
          return;
++    rc = recv(client_fd, &byte, sizeof(byte), MSG_PEEK | MSG_DONTWAIT);
++    if (rc == 0 ||
++        (rc < 0 && errno != EAGAIN && errno != EWOULDBLOCK &&
++         errno != EINTR)) {
++        close_client();
      }
 -    if (make_nonblocking(fd) < 0) { close(fd); return; }
-     client_fd = fd;
-     printf("Feature Engineering client connected.\n");
+-    client_fd = fd;
+-    printf("Feature Engineering client connected.\n");
  }
  
 -int telemetry_socket_send(const char *data, size_t len) {
 -    if (server_fd < 0 || !data || len == 0) return -1;
+-    accept_client_if_needed();
+-    if (client_fd < 0) { ipc_drops++; return 0; }
++static void accept_pending_clients(void)
++{
++    discard_closed_client();
+ 
+-    ssize_t rc = send(client_fd, data, len, MSG_DONTWAIT | MSG_NOSIGNAL);
+-    if (rc < 0) {
+-        if (errno == EAGAIN || errno == EWOULDBLOCK) { ipc_drops++; return 0; }
+-        if (errno == EPIPE || errno == ECONNRESET || errno == ENOTCONN) {
+-            close(client_fd); client_fd = -1; ipc_drops++; return 0;
++    if (server_fd < 0)
++        return;
++    for (;;) {
++        int fd = accept(server_fd, NULL, NULL);
++
++        if (fd < 0) {
++            if (errno == EINTR)
++                continue;
++            if (errno != EAGAIN && errno != EWOULDBLOCK)
++                perror("accept(telemetry.sock)");
++            return;
++        }
++        if (make_nonblocking(fd) < 0) {
++            perror("fcntl(telemetry client)");
++            close(fd);
++            continue;
++        }
++        if (client_fd < 0) {
++            client_fd = fd;
++            log_peer("connected", fd);
++        } else {
++            log_peer("rejected (one active consumer is supported)", fd);
++            close(fd);
++            ipc_stats.rejected_clients++;
+         }
+-        perror("send(telemetry.sock)"); ipc_drops++; return -1;
+     }
++}
+ 
+-    /* FIX 4: Close connection on partial write to prevent NDJSON stream corruption */
+-    if ((size_t)rc != len) {
+-        close(client_fd);
+-        client_fd = -1;
+-        ipc_drops++;
 +int telemetry_socket_send(const char *data, size_t len)
 +{
 +    size_t sent = 0;
@@ -395,18 +456,12 @@ index cb1fc7f..0a616b6 100644
 +
 +    if (server_fd < 0 || !data || len == 0)
 +        return -1;
-     accept_client_if_needed();
--    if (client_fd < 0) { ipc_drops++; return 0; }
++    accept_pending_clients();
 +    if (client_fd < 0) {
 +        ipc_stats.no_consumer++;
-+        return 0;
-+    }
- 
--    ssize_t rc = send(client_fd, data, len, MSG_DONTWAIT | MSG_NOSIGNAL);
--    if (rc < 0) {
--        if (errno == EAGAIN || errno == EWOULDBLOCK) { ipc_drops++; return 0; }
--        if (errno == EPIPE || errno == ECONNRESET || errno == ENOTCONN) {
--            close(client_fd); client_fd = -1; ipc_drops++; return 0;
+         return 0;
+     }
++
 +    while (sent < len && attempts < TELEMETRY_SEND_MAX_ATTEMPTS) {
 +        ssize_t rc;
 +
@@ -438,8 +493,7 @@ index cb1fc7f..0a616b6 100644
 +                ipc_stats.disconnect_drops++;
 +            ipc_stats.drops++;
 +            return 0;
-         }
--        perror("send(telemetry.sock)"); ipc_drops++; return -1;
++        }
 +
 +        if (rc < 0)
 +            perror("send(telemetry.sock)");
@@ -452,14 +506,8 @@ index cb1fc7f..0a616b6 100644
 +            ipc_stats.send_error_drops++;
 +        ipc_stats.drops++;
 +        return -1;
-     }
- 
--    /* FIX 4: Close connection on partial write to prevent NDJSON stream corruption */
--    if ((size_t)rc != len) {
--        close(client_fd);
--        client_fd = -1;
--        ipc_drops++;
--        return 0;
++    }
++
 +    if (sent != len) {
 +        /* The record is incomplete: close so EOF isolates any partial line. */
 +        close_client();
@@ -468,7 +516,7 @@ index cb1fc7f..0a616b6 100644
 +        else
 +            ipc_stats.send_error_drops++;
 +        ipc_stats.drops++;
-     }
++    }
      return 0;
  }
  
@@ -477,16 +525,16 @@ index cb1fc7f..0a616b6 100644
 +{
 +    return ipc_stats.drops;
 +}
- 
--void telemetry_socket_stop(void) {
--    if (client_fd >= 0) { close(client_fd); client_fd = -1; }
--    if (server_fd >= 0) { close(server_fd); server_fd = -1; }
++
 +void telemetry_socket_get_stats(struct telemetry_socket_stats *stats)
 +{
 +    if (stats)
 +        *stats = ipc_stats;
 +}
-+
+ 
+-void telemetry_socket_stop(void) {
+-    if (client_fd >= 0) { close(client_fd); client_fd = -1; }
+-    if (server_fd >= 0) { close(server_fd); server_fd = -1; }
 +void telemetry_socket_stop(void)
 +{
 +    close_client();
@@ -497,10 +545,10 @@ index cb1fc7f..0a616b6 100644
      unlink(TELEMETRY_SOCKET_PATH);
  }
 diff --git a/kernel-telemetry-bpf/telemetry_socket.h b/kernel-telemetry-bpf/telemetry_socket.h
-index ed12a6d..510247d 100644
+index ed12a6d..426f6bb 100644
 --- a/kernel-telemetry-bpf/telemetry_socket.h
 +++ b/kernel-telemetry-bpf/telemetry_socket.h
-@@ -3,11 +3,23 @@
+@@ -3,11 +3,24 @@
  
  #include <stddef.h>
  
@@ -516,6 +564,7 @@ index ed12a6d..510247d 100644
 +    unsigned long long disconnect_drops;
 +    unsigned long long send_error_drops;
 +    unsigned long long partial_write_drops;
++    unsigned long long rejected_clients;
 +};
  
  int telemetry_socket_start(void);
@@ -528,18 +577,21 @@ index ed12a6d..510247d 100644
 \ No newline at end of file
 +#endif
 diff --git a/kernel-telemetry-bpf/tests/test_process_coverage.c b/kernel-telemetry-bpf/tests/test_process_coverage.c
-index 1ddb2d8..9211efb 100644
+index 1ddb2d8..912a72f 100644
 --- a/kernel-telemetry-bpf/tests/test_process_coverage.c
 +++ b/kernel-telemetry-bpf/tests/test_process_coverage.c
-@@ -47,6 +47,7 @@ static void test_more_than_twenty_and_rank_21_retained(void)
+@@ -47,6 +47,10 @@ static void test_more_than_twenty_and_rank_21_retained(void)
      char json[JSON_BUFFER_SIZE];
      char all_json[JSON_BUFFER_SIZE * 2U];
      size_t all_used = 0;
-+    struct telemetry_socket_stats ipc = { .no_consumer = 4 };
++    struct telemetry_socket_stats ipc = {
++        .no_consumer = 4,
++        .rejected_clients = 2
++    };
  
      reset_test_state();
      for (unsigned int i = 0; i < 20; i++) {
-@@ -73,7 +74,7 @@ static void test_more_than_twenty_and_rank_21_retained(void)
+@@ -73,7 +77,7 @@ static void test_more_than_twenty_and_rank_21_retained(void)
  
      for (unsigned long long batch = 0; batch < stats.batch_count; batch++) {
          assert(build_host_window_json_batch(json, sizeof(json), "host", 1,
@@ -548,15 +600,16 @@ index 1ddb2d8..9211efb 100644
          assert(strlen(json) + all_used < sizeof(all_json));
          memcpy(all_json + all_used, json, strlen(json));
          all_used += strlen(json);
-@@ -88,6 +89,7 @@ static void test_more_than_twenty_and_rank_21_retained(void)
+@@ -88,6 +92,8 @@ static void test_more_than_twenty_and_rank_21_retained(void)
      assert(strstr(all_json, "\"records_suppressed\":0") != NULL);
      assert(strstr(all_json, "\"resources\":null") != NULL);
      assert(strstr(all_json, "\"sampled_this_window\":false") != NULL);
 +    assert(strstr(all_json, "\"ipc_no_consumer\":4") != NULL);
++    assert(strstr(all_json, "\"ipc_rejected_clients\":2") != NULL);
  
      /* Emit the fixtures for an independent JSON/parser contract check. */
      fputs(all_json, stdout);
-@@ -260,6 +262,7 @@ static void test_long_running_process_late_sensitive_action(void)
+@@ -260,6 +266,7 @@ static void test_long_running_process_late_sensitive_action(void)
  static void test_resource_limit_never_becomes_output_limit(void)
  {
      struct process_output_stats stats;
@@ -564,7 +617,7 @@ index 1ddb2d8..9211efb 100644
      char json[JSON_BUFFER_SIZE];
      size_t total_records = 0;
  
-@@ -290,7 +293,7 @@ static void test_resource_limit_never_becomes_output_limit(void)
+@@ -290,7 +297,7 @@ static void test_resource_limit_never_becomes_output_limit(void)
  
      for (unsigned long long batch = 0; batch < stats.batch_count; batch++) {
          assert(build_host_window_json_batch(json, sizeof(json), "host", 1,
@@ -573,7 +626,7 @@ index 1ddb2d8..9211efb 100644
          total_records += count_occurrences(json, "\"pid\":");
          assert(strstr(json, "\"resources\":null") != NULL);
      }
-@@ -320,6 +323,7 @@ static void test_low_signal_filter_and_instance_identity(void)
+@@ -320,6 +327,7 @@ static void test_low_signal_filter_and_instance_identity(void)
  static void test_thousand_meaningful_processes_and_rank_1000(void)
  {
      struct process_output_stats stats;
@@ -581,7 +634,7 @@ index 1ddb2d8..9211efb 100644
      char json[JSON_BUFFER_SIZE];
      size_t total_records = 0;
      int found_sensitive = 0;
-@@ -347,7 +351,7 @@ static void test_thousand_meaningful_processes_and_rank_1000(void)
+@@ -347,7 +355,7 @@ static void test_thousand_meaningful_processes_and_rank_1000(void)
  
      for (unsigned long long batch = 0; batch < stats.batch_count; batch++) {
          assert(build_host_window_json_batch(json, sizeof(json), "host", 10,
@@ -590,7 +643,7 @@ index 1ddb2d8..9211efb 100644
          total_records += count_occurrences(json, "\"pid\":");
          if (strstr(json, "\"pid\":150999") != NULL)
              found_sensitive = 1;
-@@ -362,6 +366,7 @@ static void test_thousand_meaningful_processes_and_rank_1000(void)
+@@ -362,6 +370,7 @@ static void test_thousand_meaningful_processes_and_rank_1000(void)
  static void test_state_capacity_exhaustion_is_counted(void)
  {
      struct process_output_stats stats;
@@ -598,7 +651,7 @@ index 1ddb2d8..9211efb 100644
      char json[JSON_BUFFER_SIZE];
  
      reset_test_state();
-@@ -381,7 +386,7 @@ static void test_state_capacity_exhaustion_is_counted(void)
+@@ -381,7 +390,7 @@ static void test_state_capacity_exhaustion_is_counted(void)
      assert(stats.meaningful_processes == 0);
      assert(stats.low_signal_filtered == MAX_PROCESS_STATES);
      assert(build_host_window_json_batch(json, sizeof(json), "host", 20, 25,

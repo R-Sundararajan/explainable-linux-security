@@ -64,6 +64,12 @@ bounded attempts cannot finish, the connection is closed so the consumer discard
 the incomplete final line at EOF; the next connection starts at an NDJSON record
 boundary. There is no queue, indefinite blocking, or unbounded allocation.
 
+The collector intentionally supports one active consumer. On each send boundary it
+checks for a closed peer and drains the non-blocking accept queue. The first client
+becomes active; surplus clients are identified by Unix peer credentials, closed
+immediately, and counted in `ipc_rejected_clients`. This prevents a second pipeline
+from appearing connected while waiting indefinitely behind the active recipient.
+
 The actual record has `schema_version: 2`, host/window identity, host `telemetry`,
 `process_selection`, a `processes` array, and `data_quality`. A process contains:
 
