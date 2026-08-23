@@ -125,6 +125,12 @@ static void process_window(const fe_host_window_t *window, void *context)
         return;
     }
     emit_results(window, results, result_count);
+    (void)fprintf(stderr,
+                  "anomaly pipeline: processed window_end_ns=%llu "
+                  "telemetry_processes=%zu feature_vectors=%zu "
+                  "anomalies=%zu\n",
+                  (unsigned long long)window->window_end_ns,
+                  window->process_count, vector_count, result_count);
 }
 
 static void retry_pause(void)
@@ -185,6 +191,9 @@ int main(int argc, char **argv)
                   pipeline.classifier.threshold);
     while (!stopping) {
         int status;
+        int pump_error = 0;
+        size_t malformed_before;
+        size_t oversize_before;
         if (reader->fd < 0 && telemetry_reader_connect(reader) < 0) {
             int connect_error = errno;
             if (connect_error != last_connect_error)
@@ -199,7 +208,24 @@ int main(int argc, char **argv)
             last_connect_error = 0;
             connection_announced = true;
         }
+        malformed_before = reader->stream.malformed_records;
+        oversize_before = reader->stream.oversize_records;
         status = telemetry_reader_pump(reader, process_window, &pipeline);
+        if (status < 0)
+            pump_error = errno;
+        if (reader->stream.malformed_records != malformed_before) {
+            (void)fprintf(stderr,
+                          "[WARN] rejected malformed telemetry record "
+                          "(total=%zu)\n",
+                          reader->stream.malformed_records);
+        }
+        if (reader->stream.oversize_records != oversize_before) {
+            (void)fprintf(stderr,
+                          "[WARN] rejected oversized telemetry record "
+                          "(total=%zu, limit=%u bytes)\n",
+                          reader->stream.oversize_records,
+                          (unsigned int)TELEMETRY_MAX_JSON_LINE);
+        }
         if (status <= 0) {
             if (!stopping) {
                 if (status == 0) {
@@ -208,7 +234,6 @@ int main(int argc, char **argv)
                                   "retrying.\n",
                                   socket_path);
                 } else {
-                    int pump_error = errno;
                     (void)fprintf(stderr,
                                   "[WARN] telemetry socket read failed: %s: "
                                   "%s; retrying.\n",

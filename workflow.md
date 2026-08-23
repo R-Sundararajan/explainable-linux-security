@@ -42,12 +42,12 @@ write so that an NDJSON stream is never silently spliced.
 The collector branch originally created the socket as root and changed only its
 mode to `0660`. Ownership therefore remained `root:root`; an ordinary pipeline
 process that was not in that group received `EACCES` and silently retried. The
-collector-side patch at `patches/kernel-telemetry-ipc.patch` requires the
-deployment-managed `linux-security` group, secures the runtime directory as
-`root:linux-security` mode `2750`, and creates the socket as
-`root:linux-security` mode `0660`. The directory is setgid so recreated socket
-nodes inherit the intended group, and the collector also assigns the socket group
-explicitly. The C process does not create users or groups.
+collector implementation requires the deployment-managed `linux-security` group,
+secures the runtime directory as `root:linux-security` mode `0750`, and creates
+the socket as `root:linux-security` mode `0660`. The collector assigns the socket
+group explicitly; the C process does not create users or groups. The historical
+branch-targeted change is retained in `patches/kernel-telemetry-ipc.patch` for
+traceability.
 
 `ipc_drops` remains in schema v2 for compatibility, but after the patch it counts
 only complete NDJSON records that were not delivered because of backpressure, a
