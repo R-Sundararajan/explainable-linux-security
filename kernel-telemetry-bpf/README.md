@@ -12,6 +12,18 @@ make
 
 ## Run
 
+Provision the least-privilege consumer group once, then log out and back in so
+the ordinary account receives the new supplementary group:
+
+```bash
+sudo groupadd --system --force linux-security
+sudo usermod --append --groups linux-security kali
+```
+
+The collector intentionally fails at socket startup if `linux-security` does
+not exist. Group creation is deployment policy and is not performed by the C
+binary.
+
 ```bash
 sudo ./telemetry
 ```
@@ -115,10 +127,19 @@ Example:
 ## Socket behavior
 
 - Unix Domain Socket: `/run/linux-security-assistant/telemetry.sock`
+- Runtime directory: `root:linux-security`, mode `0750`
+- Socket: `root:linux-security`, mode `0660`
 - Newline-delimited JSON records
 - Non-blocking downstream send
 - If Feature Engineering is not connected, the collector continues running
-- IPC drops are counted in the telemetry quality section
+- `ipc_no_consumer` counts generated records skipped with no connected client
+- `ipc_drops` counts records lost during an established transport attempt
+- `ipc_backpressure_drops`, `ipc_disconnect_drops`, `ipc_send_error_drops`, and
+  `ipc_partial_write_drops` explain the compatible `ipc_drops` aggregate
+- Exactly one active consumer is supported; additional queued clients are closed,
+  logged with their peer credentials, and counted in `ipc_rejected_clients`
+- A partial write gets at most four immediate non-blocking attempts; an
+  unfinished record closes the connection so EOF preserves NDJSON framing
 - The collector removes the socket on clean shutdown
 
 ## Important architecture boundary
@@ -142,7 +163,8 @@ Start the collector:
 sudo ./telemetry
 ```
 
-In another terminal:
+In another terminal, as the ordinary `linux-security` group member (without
+`sudo`):
 
 ```bash
 python3 - <<'PY'

@@ -21,9 +21,9 @@
 #include <time.h>
 #include <unistd.h>
 #include "telemetry_types.h"
+#include "telemetry_socket.h"
 #ifndef TELEMETRY_UNIT_TEST
 #include "telemetry.skel.h"
-#include "telemetry_socket.h"
 #endif
 
 static volatile sig_atomic_t exiting = 0;
@@ -696,9 +696,9 @@ static void reset_process_windows(void) {
     }
 }
 
-static void print_window_summary(unsigned long long drops_delta, unsigned long long ipc_drops_delta) {
-    printf("[WINDOW] exec=%llu exit=%llu syscall=%llu file_write_events=%llu file_write_bytes=%llu file_create=%llu file_delete=%llu rename=%llu net_state=%llu uid_change=%llu capset=%llu ringbuf_drops=%llu ipc_drops=%llu process_state_attribution_drops=%llu\n",
-        counters.process_exec, counters.process_exit, counters.syscall_events, counters.file_write_events, counters.file_write_bytes, counters.file_create, counters.file_delete, counters.file_rename, counters.net_state, counters.uid_change, counters.capset, drops_delta, ipc_drops_delta, process_state_attribution_drops);
+static void print_window_summary(unsigned long long drops_delta, const struct telemetry_socket_stats *ipc) {
+    printf("[WINDOW] exec=%llu exit=%llu syscall=%llu file_write_events=%llu file_write_bytes=%llu file_create=%llu file_delete=%llu rename=%llu net_state=%llu uid_change=%llu capset=%llu ringbuf_drops=%llu ipc_drops=%llu ipc_no_consumer=%llu ipc_backpressure_drops=%llu ipc_disconnect_drops=%llu ipc_send_error_drops=%llu ipc_partial_write_drops=%llu ipc_rejected_clients=%llu process_state_attribution_drops=%llu\n",
+        counters.process_exec, counters.process_exit, counters.syscall_events, counters.file_write_events, counters.file_write_bytes, counters.file_create, counters.file_delete, counters.file_rename, counters.net_state, counters.uid_change, counters.capset, drops_delta, ipc->drops, ipc->no_consumer, ipc->backpressure_drops, ipc->disconnect_drops, ipc->send_error_drops, ipc->partial_write_drops, ipc->rejected_clients, process_state_attribution_drops);
     memset(&counters, 0, sizeof(counters));
     process_state_attribution_drops = 0;
 }
@@ -899,8 +899,24 @@ static void prepare_process_output(struct process_output_stats *stats) {
     collect_process_output_stats(stats);
 }
 
-static int build_host_window_json_batch(char *out, size_t out_sz, const char *host_id, unsigned long long window_start_ns, unsigned long long window_end_ns, unsigned long long drops_delta, unsigned long long ipc_drops_delta, const struct process_output_stats *stats, unsigned long long batch_index) {
-    if (!out || !host_id || !stats || out_sz == 0 ||
+#ifndef TELEMETRY_UNIT_TEST
+static unsigned long long counter_delta(unsigned long long current, unsigned long long previous) {
+    return current >= previous ? current - previous : 0;
+}
+
+static void telemetry_socket_stats_delta(struct telemetry_socket_stats *delta, const struct telemetry_socket_stats *current, const struct telemetry_socket_stats *previous) {
+    delta->drops = counter_delta(current->drops, previous->drops);
+    delta->no_consumer = counter_delta(current->no_consumer, previous->no_consumer);
+    delta->backpressure_drops = counter_delta(current->backpressure_drops, previous->backpressure_drops);
+    delta->disconnect_drops = counter_delta(current->disconnect_drops, previous->disconnect_drops);
+    delta->send_error_drops = counter_delta(current->send_error_drops, previous->send_error_drops);
+    delta->partial_write_drops = counter_delta(current->partial_write_drops, previous->partial_write_drops);
+    delta->rejected_clients = counter_delta(current->rejected_clients, previous->rejected_clients);
+}
+#endif
+
+static int build_host_window_json_batch(char *out, size_t out_sz, const char *host_id, unsigned long long window_start_ns, unsigned long long window_end_ns, unsigned long long drops_delta, const struct telemetry_socket_stats *ipc, const struct process_output_stats *stats, unsigned long long batch_index) {
+    if (!out || !host_id || !ipc || !stats || out_sz == 0 ||
         batch_index >= stats->batch_count) return -1;
     size_t used = 0;
     unsigned long long batch_start =
@@ -935,7 +951,7 @@ static int build_host_window_json_batch(char *out, size_t out_sz, const char *ho
         selected_index++;
     }
 
-    if (append_json(out, out_sz, &used, "],\"data_quality\":{\"ringbuf_drops\":%llu,\"ipc_drops\":%llu,\"process_state_attribution_drops\":%llu,\"tracked_processes\":%llu,\"meaningful_processes\":%llu,\"process_records_emitted\":%llu,\"window_process_records_emitted\":%llu,\"process_records_suppressed\":0,\"process_records_filtered_low_signal\":%llu,\"transport_batches\":%llu,\"resource_samples_attempted\":%llu,\"resource_sampled_processes\":%llu,\"resource_unsampled_processes\":%llu}}\n", drops_delta, ipc_drops_delta, process_state_attribution_drops, stats->tracked_processes, stats->meaningful_processes, batch_records, stats->meaningful_processes, stats->low_signal_filtered, stats->batch_count, stats->resource_samples_attempted, stats->resource_samples_fresh, stats->records_without_fresh_resources) < 0) return -1;
+    if (append_json(out, out_sz, &used, "],\"data_quality\":{\"ringbuf_drops\":%llu,\"ipc_drops\":%llu,\"ipc_no_consumer\":%llu,\"ipc_backpressure_drops\":%llu,\"ipc_disconnect_drops\":%llu,\"ipc_send_error_drops\":%llu,\"ipc_partial_write_drops\":%llu,\"ipc_rejected_clients\":%llu,\"process_state_attribution_drops\":%llu,\"tracked_processes\":%llu,\"meaningful_processes\":%llu,\"process_records_emitted\":%llu,\"window_process_records_emitted\":%llu,\"process_records_suppressed\":0,\"process_records_filtered_low_signal\":%llu,\"transport_batches\":%llu,\"resource_samples_attempted\":%llu,\"resource_sampled_processes\":%llu,\"resource_unsampled_processes\":%llu}}\n", drops_delta, ipc->drops, ipc->no_consumer, ipc->backpressure_drops, ipc->disconnect_drops, ipc->send_error_drops, ipc->partial_write_drops, ipc->rejected_clients, process_state_attribution_drops, stats->tracked_processes, stats->meaningful_processes, batch_records, stats->meaningful_processes, stats->low_signal_filtered, stats->batch_count, stats->resource_samples_attempted, stats->resource_samples_fresh, stats->records_without_fresh_resources) < 0) return -1;
     return 0;
 }
 
@@ -947,6 +963,7 @@ int main(void) {
     char host_id[128] = {0};
     char *json = NULL;
     struct process_output_stats output_stats;
+    struct telemetry_socket_stats last_ipc_stats;
 
     signal(SIGINT, sig_handler);
     signal(SIGTERM, sig_handler);
@@ -981,7 +998,7 @@ int main(void) {
     unsigned long long last_sample = monotonic_ns();
     unsigned long long last_window = last_sample;
     unsigned long long last_drops = read_ringbuf_drops(skel);
-    unsigned long long last_ipc_drops = telemetry_socket_dropped();
+    telemetry_socket_get_stats(&last_ipc_stats);
 
     while (!exiting) {
         int poll_rc = ring_buffer__poll(rb, 250);
@@ -991,8 +1008,11 @@ int main(void) {
         if (now - last_window >= 5000000000ULL) {
             unsigned long long drops = read_ringbuf_drops(skel);
             unsigned long long drop_delta = drops >= last_drops ? drops - last_drops : 0;
-            unsigned long long ipc_drops_now = telemetry_socket_dropped();
-            unsigned long long ipc_drop_delta = ipc_drops_now >= last_ipc_drops ? ipc_drops_now - last_ipc_drops : 0;
+            struct telemetry_socket_stats ipc_stats_now;
+            struct telemetry_socket_stats ipc_stats_delta;
+            telemetry_socket_get_stats(&ipc_stats_now);
+            telemetry_socket_stats_delta(&ipc_stats_delta, &ipc_stats_now,
+                                         &last_ipc_stats);
             unsigned long long window_start = last_window;
             unsigned long long window_end = now;
             prepare_process_output(&output_stats);
@@ -1000,7 +1020,7 @@ int main(void) {
                  batch < output_stats.batch_count; batch++) {
                 if (build_host_window_json_batch(json, JSON_BUFFER_SIZE,
                         host_id, window_start, window_end, drop_delta,
-                        ipc_drop_delta, &output_stats, batch) < 0) {
+                        &ipc_stats_delta, &output_stats, batch) < 0) {
                     fprintf(stderr,
                             "[WARN] failed to serialize telemetry window batch %llu/%llu\n",
                             batch + 1, output_stats.batch_count);
@@ -1008,9 +1028,11 @@ int main(void) {
                 }
                 telemetry_socket_send(json, strlen(json));
             }
-            print_window_summary(drop_delta, ipc_drop_delta);
+            print_window_summary(drop_delta, &ipc_stats_delta);
             reset_process_windows();
-            last_drops = drops; last_ipc_drops = ipc_drops_now; last_window = now;
+            last_drops = drops;
+            last_ipc_stats = ipc_stats_now;
+            last_window = now;
         }
     }
     printf("Stopping collector...\n");

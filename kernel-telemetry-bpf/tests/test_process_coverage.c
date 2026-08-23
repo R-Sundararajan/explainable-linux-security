@@ -47,6 +47,10 @@ static void test_more_than_twenty_and_rank_21_retained(void)
     char json[JSON_BUFFER_SIZE];
     char all_json[JSON_BUFFER_SIZE * 2U];
     size_t all_used = 0;
+    struct telemetry_socket_stats ipc = {
+        .no_consumer = 4,
+        .rejected_clients = 2
+    };
 
     reset_test_state();
     for (unsigned int i = 0; i < 20; i++) {
@@ -73,7 +77,7 @@ static void test_more_than_twenty_and_rank_21_retained(void)
 
     for (unsigned long long batch = 0; batch < stats.batch_count; batch++) {
         assert(build_host_window_json_batch(json, sizeof(json), "host", 1,
-                                            2, 0, 0, &stats, batch) == 0);
+                                            2, 0, &ipc, &stats, batch) == 0);
         assert(strlen(json) + all_used < sizeof(all_json));
         memcpy(all_json + all_used, json, strlen(json));
         all_used += strlen(json);
@@ -88,6 +92,8 @@ static void test_more_than_twenty_and_rank_21_retained(void)
     assert(strstr(all_json, "\"records_suppressed\":0") != NULL);
     assert(strstr(all_json, "\"resources\":null") != NULL);
     assert(strstr(all_json, "\"sampled_this_window\":false") != NULL);
+    assert(strstr(all_json, "\"ipc_no_consumer\":4") != NULL);
+    assert(strstr(all_json, "\"ipc_rejected_clients\":2") != NULL);
 
     /* Emit the fixtures for an independent JSON/parser contract check. */
     fputs(all_json, stdout);
@@ -260,6 +266,7 @@ static void test_long_running_process_late_sensitive_action(void)
 static void test_resource_limit_never_becomes_output_limit(void)
 {
     struct process_output_stats stats;
+    struct telemetry_socket_stats ipc = {0};
     char json[JSON_BUFFER_SIZE];
     size_t total_records = 0;
 
@@ -290,7 +297,7 @@ static void test_resource_limit_never_becomes_output_limit(void)
 
     for (unsigned long long batch = 0; batch < stats.batch_count; batch++) {
         assert(build_host_window_json_batch(json, sizeof(json), "host", 1,
-                                            2, 0, 0, &stats, batch) == 0);
+                                            2, 0, &ipc, &stats, batch) == 0);
         total_records += count_occurrences(json, "\"pid\":");
         assert(strstr(json, "\"resources\":null") != NULL);
     }
@@ -320,6 +327,7 @@ static void test_low_signal_filter_and_instance_identity(void)
 static void test_thousand_meaningful_processes_and_rank_1000(void)
 {
     struct process_output_stats stats;
+    struct telemetry_socket_stats ipc = {0};
     char json[JSON_BUFFER_SIZE];
     size_t total_records = 0;
     int found_sensitive = 0;
@@ -347,7 +355,7 @@ static void test_thousand_meaningful_processes_and_rank_1000(void)
 
     for (unsigned long long batch = 0; batch < stats.batch_count; batch++) {
         assert(build_host_window_json_batch(json, sizeof(json), "host", 10,
-                                            15, 0, 0, &stats, batch) == 0);
+                                            15, 0, &ipc, &stats, batch) == 0);
         total_records += count_occurrences(json, "\"pid\":");
         if (strstr(json, "\"pid\":150999") != NULL)
             found_sensitive = 1;
@@ -362,6 +370,7 @@ static void test_thousand_meaningful_processes_and_rank_1000(void)
 static void test_state_capacity_exhaustion_is_counted(void)
 {
     struct process_output_stats stats;
+    struct telemetry_socket_stats ipc = {0};
     char json[JSON_BUFFER_SIZE];
 
     reset_test_state();
@@ -381,7 +390,7 @@ static void test_state_capacity_exhaustion_is_counted(void)
     assert(stats.meaningful_processes == 0);
     assert(stats.low_signal_filtered == MAX_PROCESS_STATES);
     assert(build_host_window_json_batch(json, sizeof(json), "host", 20, 25,
-                                        0, 0, &stats, 0) == 0);
+                                        0, &ipc, &stats, 0) == 0);
     assert(strstr(json, "\"process_state_attribution_drops\":1") != NULL);
 }
 
