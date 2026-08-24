@@ -12,8 +12,7 @@ from .config import AgentConfig, load_agent_config
 from .coordinator import SecurityAgentCoordinator
 from .explain import render_explanation
 from .ingest import EvidenceSocketServer
-from .local_runner import LocalSubprocessRunner
-from .reasoner import LocalSubprocessReasoner
+from .ml.predict import MLThreatModel
 
 
 def _arguments() -> argparse.Namespace:
@@ -27,10 +26,10 @@ def _arguments() -> argparse.Namespace:
     return parser.parse_args()
 
 
-def _provider(config: AgentConfig) -> LocalSubprocessReasoner | None:
+def _provider(config: AgentConfig) -> MLThreatModel | None:
     if config.model is None:
         return None
-    return LocalSubprocessReasoner(LocalSubprocessRunner(config.model))
+    return MLThreatModel(config.model)
 
 
 def main() -> int:
@@ -48,11 +47,7 @@ def main() -> int:
             if provider is None:
                 print("configuration valid; local model: not configured")
                 return 0
-            error = provider.runner.availability_error()
-            if error:
-                print(f"configuration invalid: local reasoner {error}", file=sys.stderr)
-                return 1
-            print("configuration valid; local model artifact and checksum verified")
+            print("configuration valid; local ML artifact and checksum verified")
             return 0
 
         stopping = threading.Event()
@@ -77,7 +72,7 @@ def main() -> int:
                 ) as server:
                     print(
                         f"security agent listening on {config.evidence_socket}; "
-                        f"model={'configured' if provider else 'not configured'}",
+                        f"ml_model={'configured' if provider else 'not configured'}",
                         flush=True,
                     )
                     while not stopping.is_set():

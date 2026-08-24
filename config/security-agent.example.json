@@ -28,5 +28,9 @@
     "allow_quarantine": false,
     "allow_kill_stop": false
   },
-  "model": null
+  "model": {
+    "artifact_path": "../models/security_threat_model_v1.joblib",
+    "artifact_sha256": "f878034b346d46d8c1e6b970cfddd727a15729c20fd1f2c5ae5b4b34f858344c",
+    "max_artifact_bytes": 16777216
+  }
 }

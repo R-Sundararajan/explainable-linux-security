@@ -51,6 +51,25 @@ def test_config_paths_must_be_absolute(tmp_path: Path) -> None:
         AgentConfig(evidence_socket=Path("relative.sock"))
 
 
+def test_model_artifact_path_is_resolved_against_config(tmp_path: Path) -> None:
+    config_path = tmp_path / "config" / "agent.json"
+    config_path.parent.mkdir()
+    config_path.write_text(
+        json.dumps(
+            {
+                "model": {
+                    "artifact_path": "../models/model.joblib",
+                    "artifact_sha256": "0" * 64,
+                }
+            }
+        ),
+        encoding="utf-8",
+    )
+    config = load_agent_config(config_path)
+    assert config.model is not None
+    assert config.model.artifact_path == tmp_path / "models" / "model.joblib"
+
+
 def test_action_enforcement_requires_matching_exact_test_identity() -> None:
     actions = ActionEnforcementConfig(
         enabled=True,

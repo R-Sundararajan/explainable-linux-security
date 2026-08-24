@@ -107,6 +107,7 @@ setup_agent() {
         python3 -m venv --system-site-packages "${VENV_DIR}"
     fi
     "${PYTHON_BIN}" -c 'import pydantic' || die "Pydantic is unavailable; install the Kali python3-pydantic package"
+    "${PYTHON_BIN}" -c 'import joblib, psutil, sklearn' || die "ML dependencies are unavailable; install Kali packages python3-joblib python3-psutil python3-sklearn"
     "${PYTHON_BIN}" -m pip install --no-build-isolation --no-deps --editable "${ROOT_DIR}"
     mkdir -p -- "${RUNTIME_DIR}"
     chmod 0700 "${RUNTIME_DIR}"
@@ -201,7 +202,10 @@ test_agent() {
     require_command python3
     make -C "${ROOT_DIR}" test
     make -C "${ROOT_DIR}/kernel-telemetry-bpf" test
-    PYTHONPATH="${ROOT_DIR}/src" python3 -m pytest "${ROOT_DIR}/tests/security_agent" -q
+    PYTHONPATH="${ROOT_DIR}/src" "${PYTHON_BIN}" -m pytest "${ROOT_DIR}/tests/security_agent" -q
+    "${ROOT_DIR}/tests/ml/build_dataset.sh"
+    "${ROOT_DIR}/tests/ml/train_models.sh"
+    "${ROOT_DIR}/tests/ml/evaluate.sh"
     "${ROOT_DIR}/tests/e2e/run_all.sh"
     bash -n "${BASH_SOURCE[0]}"
 }

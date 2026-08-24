@@ -1,0 +1,13 @@
+{
+  "artifact_bytes": 51924,
+  "assessment_peak_incremental_rss_bytes": 3063808,
+  "assessment_peak_rss_bytes": 185229312,
+  "component_artifact_bytes": {
+    "extra_trees": 26356,
+    "hist_gradient_boosting": 23608,
+    "logistic_regression": 3989
+  },
+  "loaded_incremental_rss_bytes": 2289664,
+  "loaded_model_rss_bytes": 184455168,
+  "python_agent_idle_rss_bytes": 182165504
+}

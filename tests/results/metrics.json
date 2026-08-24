@@ -1,0 +1,429 @@
+{
+  "artifact_sha256": "f878034b346d46d8c1e6b970cfddd727a15729c20fd1f2c5ae5b4b34f858344c",
+  "case_predictions": [
+    {
+      "actual": "BENIGN",
+      "deterministic": "BENIGN",
+      "ensemble": "BENIGN",
+      "extra_trees": "BENIGN",
+      "hist_gradient_boosting": "BENIGN",
+      "logistic_regression": "SUSPICIOUS",
+      "scenario_id": "benign_network:seed-1"
+    },
+    {
+      "actual": "BENIGN",
+      "deterministic": "BENIGN",
+      "ensemble": "BENIGN",
+      "extra_trees": "BENIGN",
+      "hist_gradient_boosting": "BENIGN",
+      "logistic_regression": "SUSPICIOUS",
+      "scenario_id": "benign_network:seed-2"
+    },
+    {
+      "actual": "BENIGN",
+      "deterministic": "SUSPICIOUS",
+      "ensemble": "BENIGN",
+      "extra_trees": "BENIGN",
+      "hist_gradient_boosting": "BENIGN",
+      "logistic_regression": "BENIGN",
+      "scenario_id": "benign_backup:seed-1"
+    },
+    {
+      "actual": "BENIGN",
+      "deterministic": "SUSPICIOUS",
+      "ensemble": "BENIGN",
+      "extra_trees": "BENIGN",
+      "hist_gradient_boosting": "BENIGN",
+      "logistic_regression": "BENIGN",
+      "scenario_id": "benign_backup:seed-2"
+    },
+    {
+      "actual": "SUSPICIOUS",
+      "deterministic": "BENIGN",
+      "ensemble": "SUSPICIOUS",
+      "extra_trees": "SUSPICIOUS",
+      "hist_gradient_boosting": "SUSPICIOUS",
+      "logistic_regression": "SUSPICIOUS",
+      "scenario_id": "suspicious_rare_combo:seed-1"
+    },
+    {
+      "actual": "SUSPICIOUS",
+      "deterministic": "BENIGN",
+      "ensemble": "SUSPICIOUS",
+      "extra_trees": "SUSPICIOUS",
+      "hist_gradient_boosting": "SUSPICIOUS",
+      "logistic_regression": "SUSPICIOUS",
+      "scenario_id": "suspicious_rare_combo:seed-2"
+    },
+    {
+      "actual": "SUSPICIOUS",
+      "deterministic": "BENIGN",
+      "ensemble": "SUSPICIOUS",
+      "extra_trees": "SUSPICIOUS",
+      "hist_gradient_boosting": "SUSPICIOUS",
+      "logistic_regression": "SUSPICIOUS",
+      "scenario_id": "suspicious_escalating_children:seed-1"
+    },
+    {
+      "actual": "SUSPICIOUS",
+      "deterministic": "BENIGN",
+      "ensemble": "SUSPICIOUS",
+      "extra_trees": "SUSPICIOUS",
+      "hist_gradient_boosting": "SUSPICIOUS",
+      "logistic_regression": "SUSPICIOUS",
+      "scenario_id": "suspicious_escalating_children:seed-2"
+    },
+    {
+      "actual": "MALICIOUS",
+      "deterministic": "SUSPICIOUS",
+      "ensemble": "MALICIOUS",
+      "extra_trees": "MALICIOUS",
+      "hist_gradient_boosting": "SUSPICIOUS",
+      "logistic_regression": "MALICIOUS",
+      "scenario_id": "malicious_collection_behavior:seed-1"
+    },
+    {
+      "actual": "MALICIOUS",
+      "deterministic": "SUSPICIOUS",
+      "ensemble": "MALICIOUS",
+      "extra_trees": "MALICIOUS",
+      "hist_gradient_boosting": "SUSPICIOUS",
+      "logistic_regression": "MALICIOUS",
+      "scenario_id": "malicious_collection_behavior:seed-2"
+    },
+    {
+      "actual": "MALICIOUS",
+      "deterministic": "SUSPICIOUS",
+      "ensemble": "MALICIOUS",
+      "extra_trees": "MALICIOUS",
+      "hist_gradient_boosting": "BENIGN",
+      "logistic_regression": "MALICIOUS",
+      "scenario_id": "malicious_staged_injection:seed-1"
+    },
+    {
+      "actual": "MALICIOUS",
+      "deterministic": "SUSPICIOUS",
+      "ensemble": "MALICIOUS",
+      "extra_trees": "SUSPICIOUS",
+      "hist_gradient_boosting": "BENIGN",
+      "logistic_regression": "MALICIOUS",
+      "scenario_id": "malicious_staged_injection:seed-2"
+    }
+  ],
+  "class_order": [
+    "BENIGN",
+    "SUSPICIOUS",
+    "MALICIOUS"
+  ],
+  "dataset_manifest_sha256": "af0fbc6f2421b8548e340adac2ded1e24f69b062460c073a455f0852cad7822b",
+  "evaluation_schema": "threat_model_evaluation_v1",
+  "held_out_class_distribution": {
+    "BENIGN": 4,
+    "MALICIOUS": 4,
+    "SUSPICIOUS": 4
+  },
+  "held_out_first_used_after_model_selection": true,
+  "held_out_scenario_ids": [
+    "benign_network:seed-1",
+    "benign_network:seed-2",
+    "benign_backup:seed-1",
+    "benign_backup:seed-2",
+    "suspicious_rare_combo:seed-1",
+    "suspicious_rare_combo:seed-2",
+    "suspicious_escalating_children:seed-1",
+    "suspicious_escalating_children:seed-2",
+    "malicious_collection_behavior:seed-1",
+    "malicious_collection_behavior:seed-2",
+    "malicious_staged_injection:seed-1",
+    "malicious_staged_injection:seed-2"
+  ],
+  "metrics": {
+    "deterministic": {
+      "accuracy": 0.16666666666666666,
+      "balanced_accuracy": 0.16666666666666666,
+      "benign_false_positive_rate": 0.5,
+      "confusion_matrix": [
+        [
+          2,
+          2,
+          0
+        ],
+        [
+          4,
+          0,
+          0
+        ],
+        [
+          0,
+          4,
+          0
+        ]
+      ],
+      "macro_f1": 0.13333333333333333,
+      "macro_precision": 0.1111111111111111,
+      "macro_recall": 0.16666666666666666,
+      "malicious_recall": 0.0,
+      "per_class": {
+        "BENIGN": {
+          "f1": 0.4,
+          "fn": 2,
+          "fp": 4,
+          "precision": 0.3333333333333333,
+          "recall": 0.5,
+          "tn": 4,
+          "tp": 2
+        },
+        "MALICIOUS": {
+          "f1": 0.0,
+          "fn": 4,
+          "fp": 0,
+          "precision": 0.0,
+          "recall": 0.0,
+          "tn": 8,
+          "tp": 0
+        },
+        "SUSPICIOUS": {
+          "f1": 0.0,
+          "fn": 4,
+          "fp": 6,
+          "precision": 0.0,
+          "recall": 0.0,
+          "tn": 2,
+          "tp": 0
+        }
+      },
+      "sample_count": 12,
+      "suspicious_recall": 0.0
+    },
+    "ensemble": {
+      "accuracy": 1.0,
+      "balanced_accuracy": 1.0,
+      "benign_false_positive_rate": 0.0,
+      "confusion_matrix": [
+        [
+          4,
+          0,
+          0
+        ],
+        [
+          0,
+          4,
+          0
+        ],
+        [
+          0,
+          0,
+          4
+        ]
+      ],
+      "macro_f1": 1.0,
+      "macro_precision": 1.0,
+      "macro_recall": 1.0,
+      "malicious_recall": 1.0,
+      "per_class": {
+        "BENIGN": {
+          "f1": 1.0,
+          "fn": 0,
+          "fp": 0,
+          "precision": 1.0,
+          "recall": 1.0,
+          "tn": 8,
+          "tp": 4
+        },
+        "MALICIOUS": {
+          "f1": 1.0,
+          "fn": 0,
+          "fp": 0,
+          "precision": 1.0,
+          "recall": 1.0,
+          "tn": 8,
+          "tp": 4
+        },
+        "SUSPICIOUS": {
+          "f1": 1.0,
+          "fn": 0,
+          "fp": 0,
+          "precision": 1.0,
+          "recall": 1.0,
+          "tn": 8,
+          "tp": 4
+        }
+      },
+      "sample_count": 12,
+      "suspicious_recall": 1.0
+    },
+    "extra_trees": {
+      "accuracy": 0.9166666666666666,
+      "balanced_accuracy": 0.9166666666666666,
+      "benign_false_positive_rate": 0.0,
+      "confusion_matrix": [
+        [
+          4,
+          0,
+          0
+        ],
+        [
+          0,
+          4,
+          0
+        ],
+        [
+          0,
+          1,
+          3
+        ]
+      ],
+      "macro_f1": 0.9153439153439153,
+      "macro_precision": 0.9333333333333332,
+      "macro_recall": 0.9166666666666666,
+      "malicious_recall": 0.75,
+      "per_class": {
+        "BENIGN": {
+          "f1": 1.0,
+          "fn": 0,
+          "fp": 0,
+          "precision": 1.0,
+          "recall": 1.0,
+          "tn": 8,
+          "tp": 4
+        },
+        "MALICIOUS": {
+          "f1": 0.8571428571428571,
+          "fn": 1,
+          "fp": 0,
+          "precision": 1.0,
+          "recall": 0.75,
+          "tn": 8,
+          "tp": 3
+        },
+        "SUSPICIOUS": {
+          "f1": 0.8888888888888888,
+          "fn": 0,
+          "fp": 1,
+          "precision": 0.8,
+          "recall": 1.0,
+          "tn": 7,
+          "tp": 4
+        }
+      },
+      "sample_count": 12,
+      "suspicious_recall": 1.0
+    },
+    "hist_gradient_boosting": {
+      "accuracy": 0.6666666666666666,
+      "balanced_accuracy": 0.6666666666666666,
+      "benign_false_positive_rate": 0.0,
+      "confusion_matrix": [
+        [
+          4,
+          0,
+          0
+        ],
+        [
+          0,
+          4,
+          0
+        ],
+        [
+          2,
+          2,
+          0
+        ]
+      ],
+      "macro_f1": 0.5333333333333333,
+      "macro_precision": 0.4444444444444444,
+      "macro_recall": 0.6666666666666666,
+      "malicious_recall": 0.0,
+      "per_class": {
+        "BENIGN": {
+          "f1": 0.8,
+          "fn": 0,
+          "fp": 2,
+          "precision": 0.6666666666666666,
+          "recall": 1.0,
+          "tn": 6,
+          "tp": 4
+        },
+        "MALICIOUS": {
+          "f1": 0.0,
+          "fn": 4,
+          "fp": 0,
+          "precision": 0.0,
+          "recall": 0.0,
+          "tn": 8,
+          "tp": 0
+        },
+        "SUSPICIOUS": {
+          "f1": 0.8,
+          "fn": 0,
+          "fp": 2,
+          "precision": 0.6666666666666666,
+          "recall": 1.0,
+          "tn": 6,
+          "tp": 4
+        }
+      },
+      "sample_count": 12,
+      "suspicious_recall": 1.0
+    },
+    "logistic_regression": {
+      "accuracy": 0.8333333333333334,
+      "balanced_accuracy": 0.8333333333333334,
+      "benign_false_positive_rate": 0.5,
+      "confusion_matrix": [
+        [
+          2,
+          2,
+          0
+        ],
+        [
+          0,
+          4,
+          0
+        ],
+        [
+          0,
+          0,
+          4
+        ]
+      ],
+      "macro_f1": 0.8222222222222223,
+      "macro_precision": 0.8888888888888888,
+      "macro_recall": 0.8333333333333334,
+      "malicious_recall": 1.0,
+      "per_class": {
+        "BENIGN": {
+          "f1": 0.6666666666666666,
+          "fn": 2,
+          "fp": 0,
+          "precision": 1.0,
+          "recall": 0.5,
+          "tn": 8,
+          "tp": 2
+        },
+        "MALICIOUS": {
+          "f1": 1.0,
+          "fn": 0,
+          "fp": 0,
+          "precision": 1.0,
+          "recall": 1.0,
+          "tn": 8,
+          "tp": 4
+        },
+        "SUSPICIOUS": {
+          "f1": 0.8,
+          "fn": 0,
+          "fp": 2,
+          "precision": 0.6666666666666666,
+          "recall": 1.0,
+          "tn": 6,
+          "tp": 4
+        }
+      },
+      "sample_count": 12,
+      "suspicious_recall": 1.0
+    }
+  },
+  "same_held_out_cases_for_all_models": true,
+  "selected_model": "logistic_regression"
+}

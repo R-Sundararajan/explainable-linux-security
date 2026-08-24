@@ -71,6 +71,10 @@ class FakeReasoner:
         )
 
 
+class FakeSynchronousML(FakeReasoner):
+    synchronous = True
+
+
 def config(tmp_path: Path) -> AgentConfig:
     return AgentConfig(
         evidence_socket=tmp_path / "evidence.sock",
@@ -124,6 +128,21 @@ def test_async_reasoner_emits_pending_then_model_decision(tmp_path: Path) -> Non
         coordinator.close()
     assert provider.calls == 1
     assert events[-1].event_kind == "MODEL_DECISION"
+    assert events[-1].explanation.model_status == ModelRuntimeStatus.VALID
+    assert events[-1].explanation.final_action.value == "QUARANTINE"
+
+
+def test_synchronous_ml_emits_one_bounded_decision(tmp_path: Path) -> None:
+    events: list[SecurityAuditEvent] = []
+    provider = FakeSynchronousML()
+    coordinator = SecurityAgentCoordinator(config(tmp_path), events.append, provider)
+    try:
+        mature_case(coordinator)
+    finally:
+        coordinator.close()
+    assert provider.calls == 1
+    assert len(events) == 3
+    assert events[-1].event_kind == "EVIDENCE_DECISION"
     assert events[-1].explanation.model_status == ModelRuntimeStatus.VALID
     assert events[-1].explanation.final_action.value == "QUARANTINE"
 

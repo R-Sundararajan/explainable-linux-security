@@ -114,6 +114,12 @@ def decide_policy(
         policy_reasons.append(f"POLICY_MODEL_{assessment.verdict.value}")
     elif model_status != ModelRuntimeStatus.NOT_REQUESTED:
         policy_reasons.append(f"POLICY_MODEL_{model_status.value}_FALLBACK")
+    if (
+        assessment is not None
+        and assessment.verdict == ModelVerdict.BENIGN
+        and floor != ActionFloor.MONITOR
+    ):
+        policy_reasons.append("POLICY_MODEL_DISAGREES_WITH_DETERMINISTIC_FLOOR")
 
     final_action = max(floor, model_action, key=_ACTION_RANK.__getitem__)
     quality_limited = (

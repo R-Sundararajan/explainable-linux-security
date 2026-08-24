@@ -57,6 +57,10 @@ def build_explanation(
             contradicting_evidence_ids=assessment.contradicting_evidence_ids,
             suspected_patterns=assessment.suspected_patterns,
             reasoning_summary=assessment.reasoning_summary,
+            probabilities=assessment.probabilities,
+            confidence=assessment.confidence,
+            feature_schema_version=assessment.feature_schema_version,
+            feature_influences=assessment.feature_influences,
         )
 
     known_ids = set(case.evidence_ids)
@@ -134,13 +138,27 @@ def render_explanation(explanation: SecurityExplanation) -> str:
     else:
         lines.append("  - no deterministic security condition raised the action floor")
 
-    lines.append("Model interpretation:")
+    lines.append("AI behavioral assessment:")
     if explanation.model_interpretation is None:
         lines.append(f"  - status: {explanation.model_status.value}")
     else:
         model = explanation.model_interpretation
         lines.append(f"  - model: {model.model_id}")
         lines.append(f"  - verdict: {model.verdict.value}")
+        if model.confidence is not None:
+            lines.append(f"  - confidence: {model.confidence:.3f}")
+        for probability in model.probabilities:
+            lines.append(
+                f"  - probability {probability.label.value}: {probability.probability:.3f}"
+            )
+        if model.feature_schema_version:
+            lines.append(f"  - feature schema: {model.feature_schema_version}")
+        if model.feature_influences:
+            lines.append("  - prediction most influenced by (associative, not causal):")
+            for item in model.feature_influences:
+                lines.append(
+                    f"    {item.feature}: value={item.value:.6g}, influence={item.influence:.6g}"
+                )
         if model.supporting_evidence_ids:
             lines.append(
                 "  - supporting evidence: "

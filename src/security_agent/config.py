@@ -16,7 +16,7 @@ from .case_store import (
 from .contracts import MAX_CASE_OBSERVATIONS, UInt32, StrictFrozenModel
 from .deterministic import DeterministicGateConfig
 from .ingest import DEFAULT_EVIDENCE_SOCKET, DEFAULT_QUEUE_CAPACITY
-from .local_runner import LocalRunnerConfig
+from .ml.predict import MLModelConfig
 from .policy import PolicyConfig
 
 
@@ -44,7 +44,7 @@ class AgentConfig(StrictFrozenModel):
     deterministic: DeterministicGateConfig = DeterministicGateConfig()
     policy: PolicyConfig = PolicyConfig()
     actions: ActionEnforcementConfig = ActionEnforcementConfig()
-    model: LocalRunnerConfig | None = None
+    model: MLModelConfig | None = None
 
     @field_validator("evidence_socket", "audit_path")
     @classmethod
@@ -94,7 +94,13 @@ def load_agent_config(path: str | Path | None) -> AgentConfig:
         raise ValueError("agent configuration is not strict JSON") from error
     if not isinstance(untyped, dict):
         raise ValueError("agent configuration root must be an object")
-    config = AgentConfig.model_validate_json(raw, strict=True)
+    model = untyped.get("model")
+    if isinstance(model, dict) and isinstance(model.get("artifact_path"), str):
+        artifact_path = Path(model["artifact_path"])
+        if not artifact_path.is_absolute():
+            model["artifact_path"] = str((config_path.parent / artifact_path).resolve())
+    normalized = json.dumps(untyped, separators=(",", ":")).encode()
+    config = AgentConfig.model_validate_json(normalized, strict=True)
     if config.allowed_uid is None:
         config = config.model_copy(update={"allowed_uid": os.getuid()})
     return config

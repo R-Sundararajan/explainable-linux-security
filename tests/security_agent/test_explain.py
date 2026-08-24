@@ -102,7 +102,7 @@ def test_model_interpretation_is_labeled_and_cannot_create_hard_facts() -> None:
         "multi-stage behavior",
     )
     rendered = render_explanation(explanation)
-    assert "Model interpretation:" in rendered
+    assert "AI behavioral assessment:" in rendered
     assert "suspected pattern: multi-stage behavior" in rendered
     assert "[QUARANTINE]" in rendered
 

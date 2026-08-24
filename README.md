@@ -76,9 +76,11 @@ Python agent and anomaly pipeline:
 ```
 
 Setup checks prerequisites, creates a repository-local Python environment,
-installs the package without dependency downloads, validates any configured
-local model and checksum, and builds both C runtimes. It works offline once the
-OS Python dependencies and any model artifact already exist.
+installs the package without dependency downloads, validates the pinned local
+tabular-ML artifact and checksum, and builds both C runtimes. On Kali, install
+`python3-pydantic python3-joblib python3-psutil python3-sklearn` (plus
+`python3-matplotlib` for evaluation charts). It works offline after those OS
+packages are present.
 
 After the account is first added to the group, log out and back in. Existing
 shells do not automatically acquire new supplementary groups. Verify the fresh
@@ -89,7 +91,7 @@ id -nG | tr ' ' '\n' | grep -Fx linux-security
 ```
 
 Prime sudo for the privileged eBPF collector, then use the single lifecycle
-interface. The Python agent, anomaly pipeline, and local reasoner never run as
+interface. The Python agent, anomaly pipeline, and local ML model never run as
 root:
 
 ```bash
@@ -100,11 +102,13 @@ sudo -v
 ./scripts/security-agent.sh stop
 ```
 
-The default configuration has no model and keeps the deterministic subsystem
-fully operational. Set `SECURITY_AGENT_CONFIG` to a strict JSON configuration
-derived from `config/security-agent.example.json` to configure a verified local
-subprocess model. There is no remote inference fallback. Logs, PID files, and
-the local environment stay in ignored `.runtime/` and `.venv/` directories.
+`config/security-agent.example.json` enables the checked-in, checksum-pinned
+scikit-learn model. Set `SECURITY_AGENT_CONFIG` to that file to activate it.
+Relative artifact paths are resolved against the configuration file. A `null`
+model remains a supported deterministic fallback. No Ollama, llama.cpp,
+Transformers, model server, network call, or remote inference is used by the
+active decision path. Logs, PID files, and the local environment stay in ignored
+`.runtime/` and `.venv/` directories.
 
 Action enforcement is disabled by default. The only implemented signal path is
 an explicit E2E authorization that binds one disposable sandbox worker's process
@@ -113,12 +117,12 @@ revalidates that identity through `/proc` and signals through a pidfd; model-onl
 decisions can never authorize a signal. See `tests/e2e/README.md` and run the
 bounded A-F scenarios with `./tests/e2e/run_all.sh`.
 
-`./tests/benchmark_reasoner.sh` compares a compact GGUF candidate with a
-stronger local reference on those same A-E cases. Model paths, IDs, and exact
-SHA-256 values are supplied through the documented environment variables; no
-model binary or remote inference endpoint is stored in the repository.
-The recorded Kali measurements and model-selection decision are in
-`tests/e2e/RESULTS.md`.
+The current AI layer is a supervised behavioral classifier over
+`ml_features_v1`. Run `tests/ml/build_dataset.sh`, `train_models.sh`, and
+`evaluate.sh` to reproduce the family-split corpus, model selection, held-out
+metrics, latency/memory measurements, and confusion matrices. The historical
+GGUF benchmark remains under `tests/benchmark_reasoner.*` only as an isolated
+record of why generative models were removed from the active path.
 
 ## Build manually
 

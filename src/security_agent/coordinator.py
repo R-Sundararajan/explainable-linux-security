@@ -86,6 +86,7 @@ class SecurityAgentCoordinator:
         self._executor = (
             ThreadPoolExecutor(max_workers=1, thread_name_prefix="local-reasoner")
             if reasoning_provider is not None
+            and not getattr(reasoning_provider, "synchronous", False)
             else None
         )
         self._future: Future[ReasonerOutcome] | None = None
@@ -196,12 +197,27 @@ class SecurityAgentCoordinator:
             return None
         self.stats.evidence_accepted += 1
         deterministic = evaluate_case(case, self.config.deterministic)
-        model_result = (
-            self._request_reasoning(case)
-            if deterministic.reasoning_required
-            else _not_requested()
-        )
-        self._emit(evidence, case, model_result, None, "EVIDENCE_DECISION")
+        model_outcome = None
+        if (
+            deterministic.reasoning_required
+            and self.reasoning_provider is not None
+            and getattr(self.reasoning_provider, "synchronous", False)
+        ):
+            self.stats.reasoning_submitted += 1
+            try:
+                model_outcome = self.reasoning_provider.assess(case)
+                model_result = model_outcome.result
+                self.stats.reasoning_completed += 1
+            except Exception:
+                model_result = _unavailable("ML_PROVIDER_FAILURE")
+                self.stats.reasoning_failures += 1
+        else:
+            model_result = (
+                self._request_reasoning(case)
+                if deterministic.reasoning_required
+                else _not_requested()
+            )
+        self._emit(evidence, case, model_result, model_outcome, "EVIDENCE_DECISION")
         return case
 
     def _schedule_next(self) -> None:
