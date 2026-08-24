@@ -478,6 +478,18 @@ class ModelHypothesis(StrictFrozenModel):
         max_length=MAX_CASE_OBSERVATIONS
     )
 
+    @model_validator(mode="after")
+    def unique_references(self) -> "ModelHypothesis":
+        support = set(self.supporting_evidence_ids)
+        contradict = set(self.contradicting_evidence_ids)
+        if len(support) != len(self.supporting_evidence_ids):
+            raise ValueError("duplicate hypothesis supporting evidence ID")
+        if len(contradict) != len(self.contradicting_evidence_ids):
+            raise ValueError("duplicate hypothesis contradicting evidence ID")
+        if support & contradict:
+            raise ValueError("hypothesis evidence cannot support and contradict")
+        return self
+
 
 class ModelAssessment(StrictFrozenModel):
     assessment_id: Identifier
@@ -548,3 +560,28 @@ class PolicyDecision(StrictFrozenModel):
     model_status: ModelRuntimeStatus
     evidence_quality_limited: bool
     rationale: Annotated[str, StringConstraints(min_length=1, max_length=1_023)]
+
+
+class ReasonerMetrics(StrictFrozenModel):
+    input_bytes: UInt64
+    output_bytes: UInt64
+    elapsed_ms: Annotated[float, Field(ge=0)]
+    time_to_first_output_ms: Annotated[float, Field(ge=0)] | None
+    peak_incremental_rss_bytes: UInt64
+    peak_processes: Annotated[int, Field(ge=0, le=16)]
+
+
+class ReasonerProvenance(StrictFrozenModel):
+    provider: Literal["local-subprocess"]
+    backend_id: Annotated[str, StringConstraints(min_length=1, max_length=127)]
+    model_id: Annotated[str, StringConstraints(min_length=1, max_length=255)]
+    model_sha256: Annotated[
+        str, StringConstraints(pattern=r"^[0-9a-f]{64}$")
+    ] | None
+    sandbox: Literal["bubblewrap"]
+
+
+class ReasonerOutcome(StrictFrozenModel):
+    result: ModelResult
+    metrics: ReasonerMetrics
+    provenance: ReasonerProvenance

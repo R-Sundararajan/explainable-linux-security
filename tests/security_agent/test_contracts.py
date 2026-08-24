@@ -61,3 +61,14 @@ def test_fact_outside_window_is_rejected() -> None:
     )
     with pytest.raises(MalformedEvidencePacket):
         decode_evidence_packet(encode(packet))
+
+
+def test_duplicate_json_keys_are_rejected() -> None:
+    packet = encode(evidence_dict())
+    duplicate = packet.replace(
+        b'{"schema_version":"process_evidence_v1",',
+        b'{"schema_version":"process_evidence_v1","schema_version":"process_evidence_v1",',
+        1,
+    )
+    with pytest.raises(MalformedEvidencePacket):
+        decode_evidence_packet(duplicate)

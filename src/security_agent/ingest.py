@@ -41,6 +41,15 @@ class UnknownEvidenceSchema(EvidencePacketError):
     pass
 
 
+def _reject_duplicate_keys(pairs: list[tuple[str, object]]) -> dict[str, object]:
+    result: dict[str, object] = {}
+    for key, value in pairs:
+        if key in result:
+            raise ValueError(f"duplicate JSON key: {key}")
+        result[key] = value
+    return result
+
+
 def decode_evidence_packet(
     packet: bytes,
     *,
@@ -53,8 +62,8 @@ def decode_evidence_packet(
             f"evidence packet is {len(packet)} bytes; limit is {max_packet_bytes - 1}"
         )
     try:
-        untyped = json.loads(packet)
-    except (UnicodeDecodeError, json.JSONDecodeError) as error:
+        untyped = json.loads(packet, object_pairs_hook=_reject_duplicate_keys)
+    except (UnicodeDecodeError, json.JSONDecodeError, ValueError) as error:
         raise MalformedEvidencePacket("evidence packet is not valid UTF-8 JSON") from error
     if not isinstance(untyped, dict):
         raise MalformedEvidencePacket("evidence packet root must be an object")

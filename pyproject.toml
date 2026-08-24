@@ -23,3 +23,6 @@ where = ["src"]
 pythonpath = ["src"]
 testpaths = ["tests/security_agent"]
 addopts = "-q"
+markers = [
+    "model_integration: invokes a configured local model artifact",
+]
