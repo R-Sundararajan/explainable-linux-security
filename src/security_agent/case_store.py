@@ -171,6 +171,17 @@ class CaseStore:
                 return None
             return build_security_case(tuple(managed.evidences))
 
+    def latest_evidence(
+        self,
+        host_id: str,
+        process_instance_id: str,
+    ) -> ProcessEvidence | None:
+        with self._lock:
+            managed = self._cases.get((host_id, process_instance_id))
+            if not managed or not managed.evidences:
+                return None
+            return managed.evidences[-1]
+
     def list_cases(self) -> tuple[SecurityCase, ...]:
         with self._lock:
             return tuple(

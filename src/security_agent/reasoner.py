@@ -257,6 +257,9 @@ class LocalSubprocessReasoner:
     def __init__(self, runner: LocalSubprocessRunner) -> None:
         self.runner = runner
 
+    def close(self) -> None:
+        self.runner.cancel()
+
     def assess(self, case: SecurityCase) -> ReasonerOutcome:
         try:
             prompt = build_reasoning_prompt(

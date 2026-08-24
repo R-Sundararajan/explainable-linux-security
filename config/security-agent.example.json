@@ -1,0 +1,21 @@
+{
+  "evidence_socket": "/run/linux-security-agent/evidence.sock",
+  "audit_path": "/run/linux-security-agent/events.jsonl",
+  "allowed_uid": null,
+  "ingest_queue_capacity": 128,
+  "max_cases": 256,
+  "max_case_observations": 16,
+  "case_ttl_ns": 300000000000,
+  "evidence_max_age_ns": 60000000000,
+  "future_slack_ns": 5000000000,
+  "reasoning_queue_capacity": 16,
+  "poll_timeout_seconds": 0.2,
+  "deterministic": {
+    "test_kill_stop_authorization": null
+  },
+  "policy": {
+    "model_action_cap": "QUARANTINE",
+    "poor_quality_loss_threshold": 0
+  },
+  "model": null
+}

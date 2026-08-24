@@ -311,6 +311,14 @@ def _kill_process_group(process: subprocess.Popen[bytes]) -> None:
 class LocalSubprocessRunner:
     def __init__(self, config: LocalRunnerConfig) -> None:
         self.config = config
+        self._active_process: subprocess.Popen[bytes] | None = None
+        self._active_process_lock = threading.Lock()
+
+    def cancel(self) -> None:
+        with self._active_process_lock:
+            process = self._active_process
+        if process is not None:
+            _kill_process_group(process)
 
     def availability_error(self) -> str | None:
         if os.name != "posix" or not Path("/proc").is_dir():
@@ -384,6 +392,8 @@ class LocalSubprocessRunner:
                 close_fds=True,
                 start_new_session=True,
             )
+            with self._active_process_lock:
+                self._active_process = process
             assert process.stdin is not None
             assert process.stdout is not None
             assert process.stderr is not None
@@ -463,6 +473,9 @@ class LocalSubprocessRunner:
                     process.wait(timeout=2)
                 except subprocess.TimeoutExpired:
                     pass
+            with self._active_process_lock:
+                if self._active_process is process:
+                    self._active_process = None
             _GLOBAL_REASONER_SLOT.release()
 
         finished = time.monotonic()

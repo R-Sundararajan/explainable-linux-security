@@ -459,6 +459,7 @@ class ModelVerdict(str, Enum):
 
 class ModelRuntimeStatus(str, Enum):
     NOT_REQUESTED = "NOT_REQUESTED"
+    PENDING = "PENDING"
     UNAVAILABLE = "UNAVAILABLE"
     TIMEOUT = "TIMEOUT"
     MALFORMED = "MALFORMED"
@@ -540,9 +541,15 @@ class ModelResult(StrictFrozenModel):
                 raise ValueError("VALID model result requires only an assessment")
         elif self.assessment is not None:
             raise ValueError("non-VALID model result cannot contain an assessment")
-        elif self.status == ModelRuntimeStatus.NOT_REQUESTED and self.error_code is not None:
-            raise ValueError("NOT_REQUESTED model result cannot contain an error")
-        elif self.status != ModelRuntimeStatus.NOT_REQUESTED and self.error_code is None:
+        elif self.status in {
+            ModelRuntimeStatus.NOT_REQUESTED,
+            ModelRuntimeStatus.PENDING,
+        } and self.error_code is not None:
+            raise ValueError("non-failure model result cannot contain an error")
+        elif self.status not in {
+            ModelRuntimeStatus.NOT_REQUESTED,
+            ModelRuntimeStatus.PENDING,
+        } and self.error_code is None:
             raise ValueError("failed model result requires an error code")
         return self
 

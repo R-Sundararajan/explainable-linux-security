@@ -76,6 +76,8 @@ def test_pid_reuse_is_separated_by_process_instance() -> None:
         now_ns=now + 1,
     )
     assert len(store) == 2
+    latest = store.latest_evidence("host-a", "boot:42:200")
+    assert latest is not None and latest.evidence_id == "new"
 
 
 def test_duplicate_out_of_order_identity_and_exit_are_rejected() -> None:

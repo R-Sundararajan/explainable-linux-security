@@ -13,11 +13,12 @@ privileged eBPF telemetry collector
               v
 feature engineering / anomaly pipeline (ordinary user)
               |
+              | process_evidence_v1 over bounded SOCK_SEQPACKET
               v
-executable baseline + temporal anomaly scoring
+Python security agent: cases -> deterministic gate -> optional local reasoner
               |
               v
-structured JSON anomaly output
+policy -> grounded explanation -> append-only JSONL audit
 ```
 
 The collector needs root privileges to load and attach eBPF programs. The
@@ -41,7 +42,11 @@ rejected so they cannot appear connected while waiting behind the active reader.
 - `baseline_manager/` — executable-relative bounded EWMA baseline state.
 - `anomaly_classifier/` — anomaly scoring, attribution, and ranking.
 - `anomaly_pipeline.c` — unprivileged reader-to-classifier runtime.
-- `tests/` — feature, baseline, classifier, and stream/parser tests.
+- `evidence/` and `schemas/` — authoritative bounded C-to-Python evidence contract.
+- `src/security_agent/` — ingestion, cases, gate, local reasoner, policy, XAI,
+  coordinator, and audit runtime.
+- `scripts/security-agent.sh` — repository-local setup and lifecycle command.
+- `tests/` — C, Python, contract, integration, and adversarial-safe tests.
 - `workflow.md` — detailed feature and scoring contract.
 
 The collector observes process lifecycle, selected syscalls, file activity,
@@ -61,19 +66,19 @@ sudo apt install build-essential clang llvm bpftool \
 The running kernel must expose BTF at `/sys/kernel/btf/vmlinux` unless a suitable
 `kernel-telemetry-bpf/vmlinux.h` already exists.
 
-## Install
+## Setup and lifecycle
 
-Run the installer as the ordinary account that will run the anomaly pipeline:
+Run the repository-local command as the ordinary account that will own the
+Python agent and anomaly pipeline:
 
 ```bash
-chmod +x install.sh
-./install.sh
+./scripts/security-agent.sh setup
 ```
 
-The installer checks dependencies, creates the `linux-security` system group,
-adds the current account, secures the runtime directory, and builds/tests both
-components. It does not start either runtime and does not run the anomaly
-pipeline as root.
+Setup checks prerequisites, creates a repository-local Python environment,
+installs the package without dependency downloads, validates any configured
+local model and checksum, and builds both C runtimes. It works offline once the
+OS Python dependencies and any model artifact already exist.
 
 After the account is first added to the group, log out and back in. Existing
 shells do not automatically acquire new supplementary groups. Verify the fresh
@@ -82,6 +87,24 @@ session with:
 ```bash
 id -nG | tr ' ' '\n' | grep -Fx linux-security
 ```
+
+Prime sudo for the privileged eBPF collector, then use the single lifecycle
+interface. The Python agent, anomaly pipeline, and local reasoner never run as
+root:
+
+```bash
+sudo -v
+./scripts/security-agent.sh start
+./scripts/security-agent.sh status
+./scripts/security-agent.sh test
+./scripts/security-agent.sh stop
+```
+
+The default configuration has no model and keeps the deterministic subsystem
+fully operational. Set `SECURITY_AGENT_CONFIG` to a strict JSON configuration
+derived from `config/security-agent.example.json` to configure a verified local
+subprocess model. There is no remote inference fallback. Logs, PID files, and
+the local environment stay in ignored `.runtime/` and `.venv/` directories.
 
 ## Build manually
 
@@ -95,7 +118,7 @@ make test
 `vmlinux.h`, the BPF object, skeleton, collector executable, pipeline executable,
 and test executables are generated build artifacts and are not committed.
 
-## Run
+## Run lower layers manually
 
 Terminal 1 — privileged collector:
 

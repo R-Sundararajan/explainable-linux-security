@@ -2,6 +2,8 @@
 /anomaly_pipeline.exe
 /tests/test_pipeline
 /tests/test_pipeline.exe
+/tests/test_evidence
+/tests/test_evidence.exe
 /kernel-telemetry-bpf/telemetry
 /kernel-telemetry-bpf/telemetry.exe
 /kernel-telemetry-bpf/telemetry.bpf.o
@@ -9,3 +11,7 @@
 /kernel-telemetry-bpf/vmlinux.h
 /kernel-telemetry-bpf/tests/test_process_coverage
 /kernel-telemetry-bpf/tests/test_process_coverage.exe
+/.venv/
+/.runtime/
+__pycache__/
+*.py[cod]
