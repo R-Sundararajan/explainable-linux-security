@@ -585,3 +585,77 @@ class ReasonerOutcome(StrictFrozenModel):
     result: ModelResult
     metrics: ReasonerMetrics
     provenance: ReasonerProvenance
+
+
+class ExplanationFinding(StrictFrozenModel):
+    finding_id: Identifier
+    rule_id: Annotated[str, StringConstraints(min_length=1, max_length=63)]
+    severity: FindingSeverity
+    summary: Annotated[str, StringConstraints(min_length=1, max_length=255)]
+    supporting_evidence_ids: tuple[Identifier, ...] = Field(
+        min_length=1, max_length=MAX_CASE_OBSERVATIONS
+    )
+    limitations: tuple[
+        Annotated[str, StringConstraints(min_length=1, max_length=255)], ...
+    ] = Field(max_length=6)
+
+
+class ModelInterpretation(StrictFrozenModel):
+    model_id: Annotated[str, StringConstraints(min_length=1, max_length=255)]
+    model_sha256: Annotated[
+        str, StringConstraints(pattern=r"^[0-9a-f]{64}$")
+    ] | None
+    verdict: ModelVerdict
+    hypotheses: tuple[ModelHypothesis, ...] = Field(max_length=3)
+    supporting_evidence_ids: tuple[Identifier, ...] = Field(
+        max_length=MAX_CASE_OBSERVATIONS
+    )
+    contradicting_evidence_ids: tuple[Identifier, ...] = Field(
+        max_length=MAX_CASE_OBSERVATIONS
+    )
+    suspected_patterns: tuple[
+        Annotated[str, StringConstraints(min_length=1, max_length=127)], ...
+    ] = Field(max_length=6)
+    reasoning_summary: Annotated[
+        str, StringConstraints(min_length=1, max_length=1_023)
+    ]
+
+
+class SecurityExplanation(StrictFrozenModel):
+    schema_version: Literal["security_explanation_v1"]
+    emitted_realtime_ns: UInt64
+    evidence_id: Identifier
+    case_id: Identifier
+    process_instance_id: ProcessInstanceId
+    pid: UInt32
+    case_state: CaseState
+    case_trend: CaseTrend
+    anomaly_score: Annotated[float, Field(ge=0)]
+    configured_threshold: Annotated[float, Field(ge=0)]
+    threshold_crossed: bool
+    threshold_crossings_in_case: Annotated[
+        int, Field(ge=0, le=MAX_CASE_OBSERVATIONS)
+    ]
+    deterministic_findings: tuple[ExplanationFinding, ...] = Field(max_length=16)
+    model_status: ModelRuntimeStatus
+    model_interpretation: ModelInterpretation | None
+    missing_evidence: tuple[MissingEvidenceCode, ...] = Field(
+        max_length=MAX_MISSING_CODES
+    )
+    evidence_quality_limited: bool
+    action_floor: ActionFloor
+    final_action: ActionFloor
+    reason_ids: tuple[
+        Annotated[str, StringConstraints(min_length=1, max_length=127)], ...
+    ] = Field(max_length=32)
+    policy_rationale: Annotated[
+        str, StringConstraints(min_length=1, max_length=1_023)
+    ]
+
+    @model_validator(mode="after")
+    def model_status_matches_interpretation(self) -> "SecurityExplanation":
+        if (self.model_status == ModelRuntimeStatus.VALID) != (
+            self.model_interpretation is not None
+        ):
+            raise ValueError("VALID model status and interpretation must agree")
+        return self
