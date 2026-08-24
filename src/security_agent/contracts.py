@@ -269,6 +269,30 @@ class ProcessEvidence(StrictFrozenModel):
             not in self.missing_evidence_codes
         ):
             raise ValueError("security fact overflow is not disclosed")
+        expected_missing = {
+            MissingEvidenceCode.PARENT_PROCESS_INSTANCE_ID_UNAVAILABLE:
+                self.process.parent_process_instance_id is None,
+            MissingEvidenceCode.EXECUTABLE_IDENTITY_UNAVAILABLE:
+                self.process.executable is None,
+            MissingEvidenceCode.RESOURCE_SAMPLE_UNAVAILABLE_OR_STALE:
+                not self.resources.present or not self.resources.fresh,
+            MissingEvidenceCode.TELEMETRY_QUALITY_UNAVAILABLE:
+                not self.telemetry_quality.present,
+            MissingEvidenceCode.RING_BUFFER_DATA_LOSS:
+                self.telemetry_quality.ringbuf_drops > 0,
+            MissingEvidenceCode.TELEMETRY_TRANSPORT_DATA_LOSS:
+                self.telemetry_quality.ipc_drops > 0,
+            MissingEvidenceCode.FEATURE_VECTOR_PARTIALLY_UNAVAILABLE:
+                self.features.valid_mask != (1 << MAX_FEATURES) - 1,
+            MissingEvidenceCode.BASELINE_NOT_MATURE:
+                self.anomaly.baseline_maturity != BaselineMaturity.MATURE,
+            MissingEvidenceCode.HOST_WINDOW_SPLIT_ACROSS_BATCHES:
+                self.batching.count > 1,
+        }
+        missing = set(self.missing_evidence_codes)
+        for code, condition in expected_missing.items():
+            if (code in missing) != condition:
+                raise ValueError(f"missing evidence code is inconsistent: {code.value}")
         for fact in self.security_facts:
             if (
                 fact.first_observed_ns < self.window.start_ns
@@ -424,3 +448,103 @@ class DeterministicAssessment(StrictFrozenModel):
         if self.action_floor != expected_floor or self.fallback_action != expected_floor:
             raise ValueError("assessment floor does not match its findings")
         return self
+
+
+class ModelVerdict(str, Enum):
+    BENIGN = "BENIGN"
+    SUSPICIOUS = "SUSPICIOUS"
+    MALICIOUS = "MALICIOUS"
+    INDETERMINATE = "INDETERMINATE"
+
+
+class ModelRuntimeStatus(str, Enum):
+    NOT_REQUESTED = "NOT_REQUESTED"
+    UNAVAILABLE = "UNAVAILABLE"
+    TIMEOUT = "TIMEOUT"
+    MALFORMED = "MALFORMED"
+    RESOURCE_LIMIT = "RESOURCE_LIMIT"
+    VALID = "VALID"
+    STALE = "STALE"
+    UNGROUNDED = "UNGROUNDED"
+
+
+class ModelHypothesis(StrictFrozenModel):
+    hypothesis: Annotated[str, StringConstraints(min_length=1, max_length=255)]
+    verdict: ModelVerdict
+    supporting_evidence_ids: tuple[Identifier, ...] = Field(
+        max_length=MAX_CASE_OBSERVATIONS
+    )
+    contradicting_evidence_ids: tuple[Identifier, ...] = Field(
+        max_length=MAX_CASE_OBSERVATIONS
+    )
+
+
+class ModelAssessment(StrictFrozenModel):
+    assessment_id: Identifier
+    case_id: Identifier
+    assessed_case_end_ns: UInt64
+    verdict: ModelVerdict
+    hypotheses: tuple[ModelHypothesis, ...] = Field(max_length=3)
+    supporting_evidence_ids: tuple[Identifier, ...] = Field(
+        max_length=MAX_CASE_OBSERVATIONS
+    )
+    contradicting_evidence_ids: tuple[Identifier, ...] = Field(
+        max_length=MAX_CASE_OBSERVATIONS
+    )
+    missing_evidence: tuple[MissingEvidenceCode, ...] = Field(
+        max_length=MAX_MISSING_CODES
+    )
+    suspected_patterns: tuple[
+        Annotated[str, StringConstraints(min_length=1, max_length=127)], ...
+    ] = Field(max_length=6)
+    reasoning_summary: Annotated[
+        str, StringConstraints(min_length=1, max_length=1_023)
+    ]
+
+    @model_validator(mode="after")
+    def unique_references(self) -> "ModelAssessment":
+        support = set(self.supporting_evidence_ids)
+        contradict = set(self.contradicting_evidence_ids)
+        if len(support) != len(self.supporting_evidence_ids):
+            raise ValueError("duplicate supporting evidence ID")
+        if len(contradict) != len(self.contradicting_evidence_ids):
+            raise ValueError("duplicate contradicting evidence ID")
+        if support & contradict:
+            raise ValueError("evidence cannot both support and contradict the assessment")
+        if len(self.missing_evidence) != len(set(self.missing_evidence)):
+            raise ValueError("duplicate missing evidence code")
+        return self
+
+
+class ModelResult(StrictFrozenModel):
+    status: ModelRuntimeStatus
+    assessment: ModelAssessment | None
+    error_code: Annotated[str, StringConstraints(min_length=1, max_length=127)] | None
+
+    @model_validator(mode="after")
+    def valid_status_payload(self) -> "ModelResult":
+        if self.status == ModelRuntimeStatus.VALID:
+            if self.assessment is None or self.error_code is not None:
+                raise ValueError("VALID model result requires only an assessment")
+        elif self.assessment is not None:
+            raise ValueError("non-VALID model result cannot contain an assessment")
+        elif self.status == ModelRuntimeStatus.NOT_REQUESTED and self.error_code is not None:
+            raise ValueError("NOT_REQUESTED model result cannot contain an error")
+        elif self.status != ModelRuntimeStatus.NOT_REQUESTED and self.error_code is None:
+            raise ValueError("failed model result requires an error code")
+        return self
+
+
+class PolicyDecision(StrictFrozenModel):
+    case_id: Identifier
+    evidence_id: Identifier
+    process_instance_id: ProcessInstanceId
+    pid: UInt32
+    action_floor: ActionFloor
+    final_action: ActionFloor
+    reason_ids: tuple[
+        Annotated[str, StringConstraints(min_length=1, max_length=127)], ...
+    ] = Field(max_length=32)
+    model_status: ModelRuntimeStatus
+    evidence_quality_limited: bool
+    rationale: Annotated[str, StringConstraints(min_length=1, max_length=1_023)]

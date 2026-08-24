@@ -41,7 +41,14 @@ def evidence_dict(
                 "path": fact_path,
             }
         )
-    missing = ["PARENT_PROCESS_INSTANCE_ID_UNAVAILABLE"]
+    missing = [
+        "PARENT_PROCESS_INSTANCE_ID_UNAVAILABLE",
+        "FEATURE_VECTOR_PARTIALLY_UNAVAILABLE",
+    ]
+    if not quality_present:
+        missing.append("TELEMETRY_QUALITY_UNAVAILABLE")
+    if transport_loss:
+        missing.append("RING_BUFFER_DATA_LOSS")
     return {
         "schema_version": "process_evidence_v1",
         "evidence_id": evidence_id,
