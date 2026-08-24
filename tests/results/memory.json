@@ -1,13 +1,47 @@
 {
   "artifact_bytes": 51924,
-  "assessment_peak_incremental_rss_bytes": 3063808,
-  "assessment_peak_rss_bytes": 185229312,
+  "assessment_peak_incremental_rss_bytes": 2977792,
+  "assessment_peak_rss_bytes": 186228736,
+  "candidate_isolated": {
+    "ensemble": {
+      "artifact_bytes": 57855,
+      "assessment_peak_incremental_rss_bytes": 3125248,
+      "assessment_peak_rss_bytes": 186032128,
+      "loaded_incremental_rss_bytes": 2293760,
+      "loaded_model_rss_bytes": 185200640,
+      "python_agent_idle_rss_bytes": 182906880
+    },
+    "extra_trees": {
+      "artifact_bytes": 30305,
+      "assessment_peak_incremental_rss_bytes": 2039808,
+      "assessment_peak_rss_bytes": 184737792,
+      "loaded_incremental_rss_bytes": 1044480,
+      "loaded_model_rss_bytes": 183742464,
+      "python_agent_idle_rss_bytes": 182697984
+    },
+    "hist_gradient_boosting": {
+      "artifact_bytes": 27794,
+      "assessment_peak_incremental_rss_bytes": 2236416,
+      "assessment_peak_rss_bytes": 185253888,
+      "loaded_incremental_rss_bytes": 1441792,
+      "loaded_model_rss_bytes": 184459264,
+      "python_agent_idle_rss_bytes": 183017472
+    },
+    "logistic_regression": {
+      "artifact_bytes": 8051,
+      "assessment_peak_incremental_rss_bytes": 1241088,
+      "assessment_peak_rss_bytes": 183767040,
+      "loaded_incremental_rss_bytes": 299008,
+      "loaded_model_rss_bytes": 182824960,
+      "python_agent_idle_rss_bytes": 182525952
+    }
+  },
   "component_artifact_bytes": {
-    "extra_trees": 26356,
+    "extra_trees": 26141,
     "hist_gradient_boosting": 23608,
     "logistic_regression": 3989
   },
-  "loaded_incremental_rss_bytes": 2289664,
-  "loaded_model_rss_bytes": 184455168,
-  "python_agent_idle_rss_bytes": 182165504
+  "loaded_incremental_rss_bytes": 2203648,
+  "loaded_model_rss_bytes": 185454592,
+  "python_agent_idle_rss_bytes": 183250944
 }

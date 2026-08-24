@@ -30,24 +30,26 @@ All values are milliseconds for one case on the Kali VM; 400 repeated local meas
 
 | Model/stage | Mean | P50 | P95 | P99 |
 |---|---:|---:|---:|---:|
-| Feature Construction | 0.0265 | 0.0247 | 0.0293 | 0.0449 |
-| Logistic Regression | 0.0956 | 0.0868 | 0.1367 | 0.2460 |
-| ExtraTrees | 3.3040 | 3.2284 | 3.7591 | 4.1443 |
-| HistGradientBoosting | 2.3594 | 2.2451 | 2.9111 | 3.7783 |
-| Soft-voting ensemble | 6.6792 | 6.5237 | 7.8835 | 9.2589 |
-| Selected Total | 0.1592 | 0.1427 | 0.2435 | 0.4496 |
+| Feature Construction | 0.0302 | 0.0250 | 0.0490 | 0.0967 |
+| Logistic Regression | 0.1053 | 0.0899 | 0.2108 | 0.2758 |
+| ExtraTrees | 3.3273 | 3.2256 | 3.9335 | 4.6600 |
+| HistGradientBoosting | 2.4858 | 2.3012 | 3.4262 | 4.6134 |
+| Soft-voting ensemble | 6.8286 | 6.6881 | 8.3755 | 9.2503 |
+| Selected Total | 0.1564 | 0.1417 | 0.2332 | 0.3332 |
 
 ## Memory and artifact size
 
-Isolated agent-process RSS excludes Matplotlib and evaluation-report overhead.
+Isolated agent-process RSS excludes Matplotlib and evaluation-report overhead. Candidate rows use candidate-only artifacts; the runtime-bundle row is the exact pinned artifact.
 
-| Item | Bytes | MiB |
-|---|---:|---:|
-| Python agent before artifact load | 182165504 | 173.73 |
-| Agent with loaded model bundle | 184455168 | 175.91 |
-| Peak agent RSS during assessment | 185229312 | 176.65 |
-| Incremental loaded bundle RSS | 2289664 | 2.18 |
-| Pinned model artifact | 51924 | 0.05 |
+| Model/artifact | Artifact size | Loaded incremental RSS | Peak process RSS |
+|---|---:|---:|---:|
+| Logistic Regression | 7.86 KiB | 0.29 MiB | 175.25 MiB |
+| ExtraTrees | 29.59 KiB | 1.00 MiB | 176.18 MiB |
+| HistGradientBoosting | 27.14 KiB | 1.38 MiB | 176.67 MiB |
+| Soft-voting ensemble | 56.50 KiB | 2.19 MiB | 177.41 MiB |
+| Pinned runtime bundle (Logistic Regression active) | 50.71 KiB | 2.10 MiB | 177.60 MiB |
+
+Python agent before artifact load: 174.76 MiB. Agent with pinned bundle loaded: 176.86 MiB.
 
 ## Deterministic assessment confusion matrix
 

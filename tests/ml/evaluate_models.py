@@ -107,6 +107,24 @@ def _model_size(estimator: object) -> int:
         return target.stat().st_size
 
 
+def _memory_probe(dataset: Path, artifact: Path) -> dict[str, int]:
+    artifact_hash = sha256(artifact.read_bytes()).hexdigest()
+    probe = subprocess.run(
+        [
+            sys.executable,
+            str(REPO_ROOT / "tests/ml/memory_probe.py"),
+            "--dataset", str(dataset),
+            "--artifact", str(artifact),
+            "--sha256", artifact_hash,
+        ],
+        check=True,
+        capture_output=True,
+        text=True,
+        timeout=60,
+    )
+    return json.loads(probe.stdout)
+
+
 def evaluate(dataset: Path, artifact: Path, results: Path) -> dict[str, Any]:
     bundle = joblib.load(artifact)
     partitions, dataset_hash = load_dataset(dataset)
@@ -154,25 +172,29 @@ def evaluate(dataset: Path, artifact: Path, results: Path) -> dict[str, Any]:
     )
 
     artifact_hash = sha256(artifact.read_bytes()).hexdigest()
-    probe = subprocess.run(
-        [
-            sys.executable,
-            str(REPO_ROOT / "tests/ml/memory_probe.py"),
-            "--dataset", str(dataset),
-            "--artifact", str(artifact),
-            "--sha256", artifact_hash,
-        ],
-        check=True,
-        capture_output=True,
-        text=True,
-        timeout=60,
-    )
+    runtime_memory = _memory_probe(dataset, artifact)
+    candidate_memory: dict[str, dict[str, int]] = {}
+    with tempfile.TemporaryDirectory(prefix="ml-candidate-memory-") as directory:
+        temporary = Path(directory)
+        for name in (*estimators, "ensemble"):
+            candidate_bundle = dict(bundle)
+            candidate_bundle["selected_model"] = name
+            candidate_bundle["estimators"] = (
+                estimators if name == "ensemble" else {name: estimators[name]}
+            )
+            candidate_artifact = temporary / f"{name}.joblib"
+            joblib.dump(candidate_bundle, candidate_artifact, compress=3)
+            candidate_memory[name] = {
+                **_memory_probe(dataset, candidate_artifact),
+                "artifact_bytes": candidate_artifact.stat().st_size,
+            }
     memory = {
-        **json.loads(probe.stdout),
+        **runtime_memory,
         "artifact_bytes": artifact.stat().st_size,
         "component_artifact_bytes": {
             name: _model_size(estimator) for name, estimator in estimators.items()
         },
+        "candidate_isolated": candidate_memory,
     }
 
     results.mkdir(parents=True, exist_ok=True)
@@ -262,7 +284,11 @@ def evaluate(dataset: Path, artifact: Path, results: Path) -> dict[str, Any]:
     idle_rss = memory["python_agent_idle_rss_bytes"]
     loaded_rss = memory["loaded_model_rss_bytes"]
     peak_rss = memory["assessment_peak_rss_bytes"]
-    lines.extend(["", "## Memory and artifact size", "", "Isolated agent-process RSS excludes Matplotlib and evaluation-report overhead.", "", "| Item | Bytes | MiB |", "|---|---:|---:|", f"| Python agent before artifact load | {idle_rss} | {idle_rss / 1048576:.2f} |", f"| Agent with loaded model bundle | {loaded_rss} | {loaded_rss / 1048576:.2f} |", f"| Peak agent RSS during assessment | {peak_rss} | {peak_rss / 1048576:.2f} |", f"| Incremental loaded bundle RSS | {memory['loaded_incremental_rss_bytes']} | {memory['loaded_incremental_rss_bytes'] / 1048576:.2f} |", f"| Pinned model artifact | {memory['artifact_bytes']} | {memory['artifact_bytes'] / 1048576:.2f} |"])
+    lines.extend(["", "## Memory and artifact size", "", "Isolated agent-process RSS excludes Matplotlib and evaluation-report overhead. Candidate rows use candidate-only artifacts; the runtime-bundle row is the exact pinned artifact.", "", "| Model/artifact | Artifact size | Loaded incremental RSS | Peak process RSS |", "|---|---:|---:|---:|"])
+    for name in ("logistic_regression", "extra_trees", "hist_gradient_boosting", "ensemble"):
+        item = memory["candidate_isolated"][name]
+        lines.append(f"| {display[name]} | {item['artifact_bytes'] / 1024:.2f} KiB | {item['loaded_incremental_rss_bytes'] / 1048576:.2f} MiB | {item['assessment_peak_rss_bytes'] / 1048576:.2f} MiB |")
+    lines.extend([f"| Pinned runtime bundle ({display[selected]} active) | {memory['artifact_bytes'] / 1024:.2f} KiB | {memory['loaded_incremental_rss_bytes'] / 1048576:.2f} MiB | {peak_rss / 1048576:.2f} MiB |", "", f"Python agent before artifact load: {idle_rss / 1048576:.2f} MiB. Agent with pinned bundle loaded: {loaded_rss / 1048576:.2f} MiB."])
     for name in ordered_names:
         lines.extend(["", f"## {display[name]} confusion matrix", "", _matrix_markdown(metrics[name]["confusion_matrix"]), "", "| Class | TP | TN | FP | FN | Precision | Recall | F1 |", "|---|---:|---:|---:|---:|---:|---:|---:|"])
         for label in CLASS_ORDER:
