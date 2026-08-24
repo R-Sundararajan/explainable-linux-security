@@ -576,6 +576,7 @@ class ReasonerMetrics(StrictFrozenModel):
     time_to_first_output_ms: Annotated[float, Field(ge=0)] | None
     peak_incremental_rss_bytes: UInt64
     peak_processes: Annotated[int, Field(ge=0, le=16)]
+    cpu_seconds: Annotated[float, Field(ge=0)] = 0.0
 
 
 class ReasonerProvenance(StrictFrozenModel):

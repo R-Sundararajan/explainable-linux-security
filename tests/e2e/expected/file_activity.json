@@ -3,7 +3,7 @@
   "synthetic_evidence": true,
   "observations": 1,
   "transitions": [
-    {"action": "MONITOR", "execution": "NOT_REQUIRED"}
+    {"evidence_id": "e2e-file_activity-0", "anomaly_score": 0.3, "threshold_crossed": false, "case_state": "OPEN", "action": "MONITOR", "execution": "NOT_REQUIRED", "reason_ids": ["DG000_SECURITY_FACT_OBSERVED"]}
   ],
   "final_action": "MONITOR",
   "reason_ids": ["DG000_SECURITY_FACT_OBSERVED"],

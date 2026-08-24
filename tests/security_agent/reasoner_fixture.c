@@ -40,6 +40,8 @@ int main(int argc, char **argv)
         sleep(30);
         return 0;
     }
+    if (strcmp(mode, "exit137") == 0)
+        return 137;
     if (strcmp(mode, "spawn") == 0) {
         int index;
         for (index = 0; index < 4; index++) {

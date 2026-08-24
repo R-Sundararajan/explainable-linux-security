@@ -210,6 +210,7 @@ def _metrics(run: LocalRunResult) -> ReasonerMetrics:
         time_to_first_output_ms=run.time_to_first_output_ms,
         peak_incremental_rss_bytes=run.peak_incremental_rss_bytes,
         peak_processes=run.peak_processes,
+        cpu_seconds=run.cpu_seconds,
     )
 
 

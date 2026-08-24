@@ -120,6 +120,7 @@ class LocalRunResult:
     time_to_first_output_ms: float | None
     peak_incremental_rss_bytes: int
     peak_processes: int
+    cpu_seconds: float = 0.0
 
 
 def _empty_result(error_code: str, input_bytes: int = 0) -> LocalRunResult:
@@ -299,6 +300,21 @@ def _rss_bytes(pid: int) -> int:
     return 0
 
 
+def _process_cpu_seconds(pid: int) -> float:
+    try:
+        raw = Path(f"/proc/{pid}/stat").read_text(encoding="ascii")
+        close = raw.rfind(")")
+        if close < 0:
+            return 0.0
+        fields = raw[close + 2 :].split()
+        if len(fields) <= 12:
+            return 0.0
+        ticks = int(fields[11]) + int(fields[12])
+        return ticks / os.sysconf("SC_CLK_TCK")
+    except (FileNotFoundError, PermissionError, OSError, ValueError):
+        return 0.0
+
+
 def _kill_process_group(process: subprocess.Popen[bytes]) -> None:
     if process.poll() is not None:
         return
@@ -313,6 +329,12 @@ class LocalSubprocessRunner:
         self.config = config
         self._active_process: subprocess.Popen[bytes] | None = None
         self._active_process_lock = threading.Lock()
+
+    @property
+    def active_process_count(self) -> int:
+        with self._active_process_lock:
+            process = self._active_process
+        return int(process is not None and process.poll() is None)
 
     def cancel(self) -> None:
         with self._active_process_lock:
@@ -378,6 +400,7 @@ class LocalSubprocessRunner:
         first_output: float | None = None
         peak_rss = 0
         peak_processes = 0
+        peak_cpu_seconds = 0.0
         error_code: str | None = None
         timed_out = False
         resource_limited = False
@@ -415,6 +438,10 @@ class LocalSubprocessRunner:
                 peak_processes = max(peak_processes, len(processes))
                 current_rss = sum(_rss_bytes(pid) for pid in processes)
                 peak_rss = max(peak_rss, current_rss)
+                current_cpu_seconds = sum(
+                    _process_cpu_seconds(pid) for pid in processes
+                )
+                peak_cpu_seconds = max(peak_cpu_seconds, current_cpu_seconds)
                 if len(processes) > self.config.max_processes:
                     error_code = "PROCESS_LIMIT"
                     resource_limited = True
@@ -452,7 +479,12 @@ class LocalSubprocessRunner:
 
             process.wait(timeout=2)
             if error_code is None and process.returncode != 0:
-                if process.returncode in {-signal.SIGXCPU, -signal.SIGKILL}:
+                if process.returncode in {
+                    -signal.SIGXCPU,
+                    -signal.SIGKILL,
+                    128 + signal.SIGXCPU,
+                    128 + signal.SIGKILL,
+                }:
                     error_code = "CPU_OR_MEMORY_LIMIT"
                     resource_limited = True
                 else:
@@ -493,4 +525,5 @@ class LocalSubprocessRunner:
             ),
             peak_incremental_rss_bytes=peak_rss,
             peak_processes=peak_processes,
+            cpu_seconds=peak_cpu_seconds,
         )

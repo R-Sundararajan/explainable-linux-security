@@ -3,9 +3,9 @@
   "synthetic_evidence": true,
   "observations": 3,
   "transitions": [
-    {"action": "MONITOR", "execution": "NOT_REQUIRED"},
-    {"action": "QUARANTINE", "execution": "APPLIED"},
-    {"action": "KILL_STOP", "execution": "APPLIED"}
+    {"evidence_id": "e2e-kill_stop-0", "anomaly_score": 0.1, "threshold_crossed": false, "case_state": "OPEN", "action": "MONITOR", "execution": "NOT_REQUIRED", "reason_ids": ["POLICY_NO_ESCALATION"]},
+    {"evidence_id": "e2e-kill_stop-1", "anomaly_score": 0.5, "threshold_crossed": false, "case_state": "OPEN", "action": "QUARANTINE", "execution": "APPLIED", "reason_ids": ["DG901_OPT_IN_TEST_QUARANTINE"]},
+    {"evidence_id": "e2e-kill_stop-2", "anomaly_score": 2.5, "threshold_crossed": true, "case_state": "MATURE", "action": "KILL_STOP", "execution": "APPLIED", "reason_ids": ["DG901_OPT_IN_TEST_QUARANTINE", "DG900_OPT_IN_TEST_KILL_STOP"]}
   ],
   "final_action": "KILL_STOP",
   "reason_ids": [

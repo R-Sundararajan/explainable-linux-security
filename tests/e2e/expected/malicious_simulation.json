@@ -3,7 +3,7 @@
   "synthetic_evidence": true,
   "observations": 1,
   "transitions": [
-    {"action": "QUARANTINE", "execution": "AUDIT_ONLY"}
+    {"evidence_id": "e2e-malicious_simulation-0", "anomaly_score": 1.0, "threshold_crossed": false, "case_state": "MATURE", "action": "QUARANTINE", "execution": "AUDIT_ONLY", "reason_ids": ["DG004_CORROBORATED_PRIVILEGE_TRANSITION"]}
   ],
   "final_action": "QUARANTINE",
   "reason_ids": ["DG004_CORROBORATED_PRIVILEGE_TRANSITION"],

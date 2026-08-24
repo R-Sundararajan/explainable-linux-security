@@ -3,9 +3,9 @@
   "synthetic_evidence": true,
   "observations": 3,
   "transitions": [
-    {"action": "MONITOR", "execution": "NOT_REQUIRED"},
-    {"action": "MONITOR", "execution": "NOT_REQUIRED"},
-    {"action": "MONITOR", "execution": "NOT_REQUIRED"}
+    {"evidence_id": "e2e-benign_activity-0", "anomaly_score": 2.1, "threshold_crossed": true, "case_state": "OPEN", "action": "MONITOR", "execution": "NOT_REQUIRED", "reason_ids": ["POLICY_NO_ESCALATION"]},
+    {"evidence_id": "e2e-benign_activity-1", "anomaly_score": 3.0, "threshold_crossed": true, "case_state": "OPEN", "action": "MONITOR", "execution": "NOT_REQUIRED", "reason_ids": ["POLICY_NO_ESCALATION"]},
+    {"evidence_id": "e2e-benign_activity-2", "anomaly_score": 3.5, "threshold_crossed": true, "case_state": "MATURE", "action": "MONITOR", "execution": "NOT_REQUIRED", "reason_ids": ["POLICY_MODEL_UNAVAILABLE_FALLBACK"]}
   ],
   "final_action": "MONITOR",
   "reason_ids": ["POLICY_MODEL_UNAVAILABLE_FALLBACK"],

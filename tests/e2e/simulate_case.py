@@ -19,6 +19,7 @@ sys.path.insert(0, str(REPO_ROOT / "src"))
 sys.path.insert(0, str(REPO_ROOT / "tests" / "security_agent"))
 
 from helpers import evidence_dict  # noqa: E402
+from safe_workloads import run_safe_workload  # noqa: E402
 from security_agent.actions import (  # noqa: E402
     ActionEnforcementConfig,
     process_start_boottime_ns,
@@ -116,8 +117,14 @@ def _summary(
         "observations": len(events),
         "transitions": [
             {
+                "emitted_realtime_ns": event.explanation.emitted_realtime_ns,
+                "evidence_id": event.explanation.evidence_id,
+                "anomaly_score": event.explanation.anomaly_score,
+                "threshold_crossed": event.explanation.threshold_crossed,
+                "case_state": event.explanation.case_state.value,
                 "action": event.explanation.final_action.value,
                 "execution": event.action_execution.status.value,
+                "reason_ids": list(event.explanation.reason_ids),
             }
             for event in events
         ],
@@ -145,59 +152,62 @@ def _run_synthetic(scenario: str) -> dict[str, Any]:
         )
         coordinator = SecurityAgentCoordinator(config, events.append)
         try:
-            base = time.monotonic_ns() - 10_000_000_000
-            if scenario == "simple_activity":
-                definitions = (
-                    (0.1, ()),
-                    (0.2, ()),
-                    (0.3, ()),
-                )
-            elif scenario == "file_activity":
-                definitions = ((0.3, ("DESTRUCTIVE_FILE_ACTIVITY_ATTEMPT",)),)
-            elif scenario == "benign_activity":
-                definitions = (
-                    (2.1, ()),
-                    (3.0, ()),
-                    (3.5, ()),
-                )
-            elif scenario == "suspicious_activity":
-                definitions = (
-                    (0.1, ("PTRACE_ATTEMPT",)),
-                    (0.5, ("MEMFD_CREATE_ATTEMPT",)),
-                    (1.0, ("PTRACE_ATTEMPT", "MEMFD_CREATE_ATTEMPT")),
-                )
-            elif scenario == "malicious_simulation":
-                definitions = (
-                    (
-                        1.0,
-                        (
-                            "CAPSET_ATTEMPT",
-                            "MEMFD_CREATE_ATTEMPT",
-                            "DESTRUCTIVE_FILE_ACTIVITY_ATTEMPT",
-                        ),
-                    ),
-                )
-            else:
-                raise ValueError(f"unsupported synthetic scenario: {scenario}")
-            for index, (score, facts) in enumerate(definitions):
-                evidence = _packet(
-                    scenario,
-                    index,
-                    window_end_ns=base + (index + 1) * 1_000_000_000,
-                    score=score,
-                    facts=facts,
-                )
-                if scenario == "benign_activity":
-                    raw = evidence.model_dump(mode="json")
-                    raw["activity"]["syscall_events"] = 500_000
-                    raw["activity"]["file_write_events"] = 20_000
-                    evidence = decode_evidence_packet(json.dumps(raw).encode())
+            run_safe_workload(scenario, root / "workload")
+            for index, evidence in enumerate(build_synthetic_scenario(scenario)):
                 accepted = coordinator.process_evidence(evidence)
                 if accepted is None:
                     raise AssertionError(f"scenario evidence {index} was rejected")
         finally:
             coordinator.close()
     return _summary(scenario, events, synthetic_evidence=True)
+
+
+def build_synthetic_scenario(scenario: str) -> tuple[Any, ...]:
+    """Build the same bounded A-E corpus used by E2E and model benchmarks."""
+
+    base = time.monotonic_ns() - 10_000_000_000
+    if scenario == "simple_activity":
+        definitions = ((0.1, ()), (0.2, ()), (0.3, ()))
+    elif scenario == "file_activity":
+        definitions = ((0.3, ("DESTRUCTIVE_FILE_ACTIVITY_ATTEMPT",)),)
+    elif scenario == "benign_activity":
+        definitions = ((2.1, ()), (3.0, ()), (3.5, ()))
+    elif scenario == "suspicious_activity":
+        definitions = (
+            (0.1, ("PTRACE_ATTEMPT",)),
+            (0.5, ("MEMFD_CREATE_ATTEMPT",)),
+            (1.0, ("PTRACE_ATTEMPT", "MEMFD_CREATE_ATTEMPT")),
+        )
+    elif scenario == "malicious_simulation":
+        definitions = (
+            (
+                1.0,
+                (
+                    "CAPSET_ATTEMPT",
+                    "MEMFD_CREATE_ATTEMPT",
+                    "DESTRUCTIVE_FILE_ACTIVITY_ATTEMPT",
+                ),
+            ),
+        )
+    else:
+        raise ValueError(f"unsupported synthetic scenario: {scenario}")
+
+    evidences = []
+    for index, (score, facts) in enumerate(definitions):
+        evidence = _packet(
+            scenario,
+            index,
+            window_end_ns=base + (index + 1) * 1_000_000_000,
+            score=score,
+            facts=facts,
+        )
+        if scenario == "benign_activity":
+            raw = evidence.model_dump(mode="json")
+            raw["activity"]["syscall_events"] = 500_000
+            raw["activity"]["file_write_events"] = 20_000
+            evidence = decode_evidence_packet(json.dumps(raw).encode())
+        evidences.append(evidence)
+    return tuple(evidences)
 
 
 def _compile_worker(sandbox: Path) -> Path:
@@ -317,11 +327,14 @@ def _run_kill_stop() -> dict[str, Any]:
 def _validate(summary: dict[str, Any]) -> None:
     expected_path = Path(__file__).parent / "expected" / f"{summary['scenario']}.json"
     expected = json.loads(expected_path.read_text(encoding="utf-8"))
-    if summary != expected:
+    stable_summary = json.loads(json.dumps(summary))
+    for transition in stable_summary["transitions"]:
+        transition.pop("emitted_realtime_ns")
+    if stable_summary != expected:
         raise AssertionError(
             "scenario result mismatch\n"
             f"expected={json.dumps(expected, sort_keys=True)}\n"
-            f"actual={json.dumps(summary, sort_keys=True)}"
+            f"actual={json.dumps(stable_summary, sort_keys=True)}"
         )
 
 

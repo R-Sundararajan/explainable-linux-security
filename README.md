@@ -113,6 +113,13 @@ revalidates that identity through `/proc` and signals through a pidfd; model-onl
 decisions can never authorize a signal. See `tests/e2e/README.md` and run the
 bounded A-F scenarios with `./tests/e2e/run_all.sh`.
 
+`./tests/benchmark_reasoner.sh` compares a compact GGUF candidate with a
+stronger local reference on those same A-E cases. Model paths, IDs, and exact
+SHA-256 values are supplied through the documented environment variables; no
+model binary or remote inference endpoint is stored in the repository.
+The recorded Kali measurements and model-selection decision are in
+`tests/e2e/RESULTS.md`.
+
 ## Build manually
 
 ```bash

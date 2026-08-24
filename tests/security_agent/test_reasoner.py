@@ -59,13 +59,16 @@ def provider(fixture_binary: Path, mode: str = "valid", **kwargs: object):
 
 
 def test_hardened_subprocess_returns_strict_grounded_result(fixture_binary: Path) -> None:
-    outcome = provider(fixture_binary).assess(security_case())
+    reasoner = provider(fixture_binary)
+    assert reasoner.runner.active_process_count == 0
+    outcome = reasoner.assess(security_case())
     assert outcome.result.status == ModelRuntimeStatus.VALID
     assert outcome.result.assessment is not None
     assert outcome.result.assessment.verdict.value == "INDETERMINATE"
     assert outcome.metrics.peak_incremental_rss_bytes < 500 * 1024 * 1024
     assert 1 <= outcome.metrics.peak_processes <= 3
     assert outcome.metrics.output_bytes > 0
+    assert reasoner.runner.active_process_count == 0
 
     trailer = provider(fixture_binary, "trailer").assess(security_case())
     assert trailer.result.status == ModelRuntimeStatus.VALID
@@ -101,6 +104,10 @@ def test_timeout_and_process_limit_are_enforced(fixture_binary: Path) -> None:
     )
     assert process_limit.result.status == ModelRuntimeStatus.RESOURCE_LIMIT
     assert process_limit.result.error_code == "PROCESS_LIMIT"
+
+    wrapped_kill = provider(fixture_binary, "exit137").assess(security_case())
+    assert wrapped_kill.result.status == ModelRuntimeStatus.RESOURCE_LIMIT
+    assert wrapped_kill.result.error_code == "CPU_OR_MEMORY_LIMIT"
 
 
 def test_only_one_reasoner_instance_runs_concurrently(fixture_binary: Path) -> None:
