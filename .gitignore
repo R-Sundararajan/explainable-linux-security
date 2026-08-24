@@ -16,3 +16,4 @@
 __pycache__/
 tests/ml/dataset/
 *.py[cod]
+kernel-telemetry-bpf/telemetry.log

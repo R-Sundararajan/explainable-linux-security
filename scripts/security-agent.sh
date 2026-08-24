@@ -12,6 +12,8 @@ EVIDENCE_SOCKET="/run/linux-security-agent/evidence.sock"
 TELEMETRY_SOCKET="/run/linux-security-assistant/telemetry.sock"
 AGENT_GROUP="linux-security"
 CONFIG_FILE="${SECURITY_AGENT_CONFIG:-}"
+MODEL_DIR="${ROOT_DIR}/models"
+MODEL_ARTIFACT="${MODEL_DIR}/security_threat_model_v1.joblib"
 
 die() {
     printf 'security-agent: %s\n' "$*" >&2
@@ -100,6 +102,11 @@ setup_agent() {
         sudo -n usermod --append --groups "${AGENT_GROUP}" "$(id -un)" || die "unable to add current user to ${AGENT_GROUP}"
         die "group membership added; log out and back in, then rerun setup"
     fi
+
+    [[ -d "${MODEL_DIR}" ]] || die "model directory is missing: ${MODEL_DIR}"
+    [[ -f "${MODEL_ARTIFACT}" ]] || die "model artifact is missing: ${MODEL_ARTIFACT}"
+    chmod 0755 "${MODEL_DIR}"
+    chmod 0644 "${MODEL_ARTIFACT}"
 
     make -C "${ROOT_DIR}" all
     make -C "${ROOT_DIR}/kernel-telemetry-bpf" all
