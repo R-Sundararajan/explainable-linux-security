@@ -57,13 +57,15 @@ Install the required build tools, eBPF libraries, and Python runtime:
 ```bash
 sudo apt update
 sudo apt install build-essential clang llvm bpftool \
-  libbpf-dev libelf-dev zlib1g-dev pkg-config python3
+  libbpf-dev libelf-dev zlib1g-dev pkg-config bubblewrap util-linux sudo \
+  python3 python3-venv
 ```
 
 ### Python Dependencies
 For the Python security agent and local ML model, install the following (available as OS packages on Kali):
 ```bash
-sudo apt install python3-pydantic python3-joblib python3-psutil python3-sklearn
+sudo apt install python3-pydantic python3-joblib python3-psutil python3-sklearn \
+  python3-pytest python3-jsonschema
 # Optional: for evaluation charts
 sudo apt install python3-matplotlib 
 ```
@@ -79,8 +81,12 @@ The running kernel must expose BTF at `/sys/kernel/btf/vmlinux` unless a suitabl
 Run the repository-local setup command as the ordinary account that will own the Python agent and anomaly pipeline:
 
 ```bash
+sudo -v
+export SECURITY_AGENT_CONFIG="$PWD/config/security-agent.example.json"
 ./scripts/security-agent.sh setup
 ```
+
+Keep `SECURITY_AGENT_CONFIG` set when running `setup` and `start`; this example configuration enables the checked-in local ML model. On the first run, setup may add your account to the `linux-security` group and ask you to log out and back in. After logging in again, return to the repository, repeat the commands above, and setup will continue.
 
 **What setup does:**
 - Checks prerequisites.
@@ -98,7 +104,7 @@ id -nG | tr ' ' '\n' | grep -Fx linux-security
 ```
 
 ### Sudo Priming
-Prime sudo for the privileged eBPF collector before using the lifecycle interface:
+Prime sudo before setup or start so the lifecycle script can create the group/runtime directories and launch the privileged eBPF collector without prompting:
 ```bash
 sudo -v
 ```
@@ -126,20 +132,57 @@ make test
 ## 5. Execution Procedure
 
 ### Standard Lifecycle (Recommended)
-Use the single lifecycle interface to manage the Python agent, anomaly pipeline, and local ML model. These components never run as root:
+Use the single lifecycle interface to manage the complete system. The Python agent and anomaly pipeline run as the ordinary user; only the eBPF collector receives the required root privileges:
 
 ```bash
 ./scripts/security-agent.sh start
 ./scripts/security-agent.sh status
-./scripts/security-agent.sh test
 ./scripts/security-agent.sh stop
 ```
 
+Run `status` whenever you need to confirm the agent, pipeline, collector, and both Unix sockets. Use `stop` for a clean shutdown; do not kill components by PID during normal operation. If this is a new shell, export `SECURITY_AGENT_CONFIG="$PWD/config/security-agent.example.json"` again before `start`.
+
 **Configuration:**
-- `config/security-agent.example.json` enables the checked-in, checksum-pinned scikit-learn model. 
-- Set `SECURITY_AGENT_CONFIG` to that file to activate it. Relative artifact paths are resolved against the configuration file. 
-- A `null` model remains a supported deterministic fallback. No Ollama, llama.cpp, Transformers, model server, network call, or remote inference is used by the active decision path. 
-- Logs, PID files, and the local environment stay in ignored `.runtime/` and `.venv/` directories.
+- `config/security-agent.example.json` enables the checked-in, checksum-pinned scikit-learn model. Relative artifact paths are resolved against the configuration file.
+- A `null` model remains a supported deterministic fallback. The active ML model is entirely local: no model server, network call, or remote inference is required.
+- Runtime logs and PID files are written under `.runtime/`; the repository-local environment is `.venv/`.
+
+### Runtime Logs and XAI Explanations
+
+The lifecycle command writes component output to:
+
+- `.runtime/agent.log` — JSON audit events plus the human-readable XAI explanation for each decision.
+- `.runtime/pipeline.log` — anomaly-pipeline processing and forwarding output.
+- `.runtime/collector.log` — privileged eBPF collector output and drop counters.
+- `/run/linux-security-agent/events.jsonl` — append-only JSONL audit configured by `config/security-agent.example.json`.
+
+Follow explanations live and list recent decisions with:
+
+```bash
+tail -f .runtime/agent.log
+grep -E '^\[(MONITOR|QUARANTINE|KILL/STOP)\]$' .runtime/agent.log | tail -n 20
+```
+
+For an agent-only debugging run, stop the lifecycle-managed system first, then save the existing rendered explanations to a dedicated text file. Stop this foreground command with `Ctrl+C`:
+
+```bash
+./scripts/security-agent.sh stop
+.venv/bin/python -m security_agent \
+  --config config/security-agent.example.json \
+  --explanation-file "$PWD/.runtime/explanations.txt"
+```
+
+### Tests and Safe Demo
+
+After setup, run the Python suite, bounded E2E scenarios, or the live local-ML demo with:
+
+```bash
+PYTHONPATH="$PWD/src" .venv/bin/python -m pytest tests/security_agent -q
+./tests/e2e/run_all.sh
+./tests/e2e/demo_live_ml.sh
+```
+
+The E2E scripts use sandboxed synthetic evidence. The KILL/STOP demonstration can signal only its own dedicated disposable worker.
 
 ### Manual Execution (Lower Layers)
 To run the lower C layers manually for debugging or development:
@@ -177,6 +220,7 @@ pgrep -af anomaly_pipeline
 ### Troubleshooting
 - **`Permission denied`**: confirm the socket modes and use a fresh login after group assignment. `id -nG` for the running shell must include `linux-security`.
 - **Connected but no output**: check `pgrep -af anomaly_pipeline`. Only one consumer is supported. Stop stale instances, then start one pipeline.
+- **Stale telemetry socket after an unclean exit**: run `./scripts/security-agent.sh status` and `sudo ss -xap | grep -F /run/linux-security-assistant/telemetry.sock` first. Remove `/run/linux-security-assistant/telemetry.sock` only when the lifecycle status is stopped and `ss` confirms that no active process owns it; then use `sudo rm -f -- /run/linux-security-assistant/telemetry.sock` before restarting.
 - **Malformed/oversized warnings**: capture one raw collector record and compare it with the schema-v2 contract in `workflow.md`; do not merely restart as root.
 - **Collector build cannot create `vmlinux.h`**: verify `/sys/kernel/btf/vmlinux` and the installed `bpftool`.
 - **Nonzero `ipc_backpressure_drops`**: the active consumer is not draining records promptly. `ipc_no_consumer` instead means no reader was attached.
