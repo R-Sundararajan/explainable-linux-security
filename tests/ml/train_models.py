@@ -110,6 +110,7 @@ def train(dataset: Path, artifact: Path, results: Path) -> dict[str, object]:
     }
     artifact.parent.mkdir(parents=True, exist_ok=True)
     joblib.dump(bundle, artifact, compress=3)
+    artifact.chmod(0o644)
     artifact_hash = sha256(artifact.read_bytes()).hexdigest()
     artifact.with_suffix(artifact.suffix + ".sha256").write_text(
         f"{artifact_hash}  {artifact.name}\n", encoding="ascii"
