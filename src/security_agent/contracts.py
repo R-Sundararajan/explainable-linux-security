@@ -291,6 +291,20 @@ class CaseState(str, Enum):
     EXITED = "EXITED"
 
 
+class ActionFloor(str, Enum):
+    MONITOR = "MONITOR"
+    QUARANTINE = "QUARANTINE"
+    KILL_STOP = "KILL_STOP"
+
+
+class FindingSeverity(str, Enum):
+    INFO = "INFO"
+    LOW = "LOW"
+    MEDIUM = "MEDIUM"
+    HIGH = "HIGH"
+    CRITICAL = "CRITICAL"
+
+
 class CaseObservation(StrictFrozenModel):
     evidence_id: Identifier
     window_start_ns: UInt64
@@ -354,3 +368,59 @@ class SecurityCase(StrictFrozenModel):
     threshold_crossings: Annotated[int, Field(ge=0, le=MAX_CASE_OBSERVATIONS)]
     quality: CaseQuality
     mature_for_reasoning: bool
+
+
+class DeterministicFinding(StrictFrozenModel):
+    finding_id: Identifier
+    rule_id: Annotated[str, StringConstraints(min_length=1, max_length=63)]
+    severity: FindingSeverity
+    summary: Annotated[str, StringConstraints(min_length=1, max_length=255)]
+    supporting_evidence_ids: tuple[Identifier, ...] = Field(
+        min_length=1, max_length=MAX_CASE_OBSERVATIONS
+    )
+    limitations: tuple[
+        Annotated[str, StringConstraints(min_length=1, max_length=255)], ...
+    ] = Field(max_length=6)
+    action_floor: ActionFloor
+    kill_stop_authorized: bool
+
+    @model_validator(mode="after")
+    def explicit_kill_authorization(self) -> "DeterministicFinding":
+        if self.kill_stop_authorized != (
+            self.action_floor == ActionFloor.KILL_STOP
+        ):
+            raise ValueError("KILL_STOP floor and authorization must agree")
+        if len(self.supporting_evidence_ids) != len(
+            set(self.supporting_evidence_ids)
+        ):
+            raise ValueError("duplicate supporting evidence ID")
+        return self
+
+
+class DeterministicAssessment(StrictFrozenModel):
+    case_id: Identifier
+    findings: tuple[DeterministicFinding, ...] = Field(max_length=16)
+    action_floor: ActionFloor
+    reason_ids: tuple[
+        Annotated[str, StringConstraints(min_length=1, max_length=63)], ...
+    ] = Field(max_length=16)
+    reasoning_required: bool
+    fallback_action: ActionFloor
+
+    @model_validator(mode="after")
+    def consistent_assessment(self) -> "DeterministicAssessment":
+        expected_ids = tuple(finding.rule_id for finding in self.findings)
+        if self.reason_ids != expected_ids:
+            raise ValueError("reason_ids must match ordered finding rule IDs")
+        expected_floor = max(
+            (finding.action_floor for finding in self.findings),
+            key=lambda action: {
+                ActionFloor.MONITOR: 0,
+                ActionFloor.QUARANTINE: 1,
+                ActionFloor.KILL_STOP: 2,
+            }[action],
+            default=ActionFloor.MONITOR,
+        )
+        if self.action_floor != expected_floor or self.fallback_action != expected_floor:
+            raise ValueError("assessment floor does not match its findings")
+        return self

@@ -16,6 +16,8 @@ def evidence_dict(
     threshold: float = 2.0,
     fact_type: str | None = None,
     target_pid: int | None = None,
+    fact_path: str | None = None,
+    executable: str = "/usr/bin/demo",
     exit_seen: bool = False,
     quality_present: bool = True,
     transport_loss: int = 0,
@@ -36,7 +38,7 @@ def evidence_dict(
                 "first_observed_ns": window_start_ns + 1,
                 "last_observed_ns": window_start_ns + 1,
                 "target_pid": target_pid,
-                "path": None,
+                "path": fact_path,
             }
         )
     missing = ["PARENT_PROCESS_INSTANCE_ID_UNAVAILABLE"]
@@ -58,7 +60,7 @@ def evidence_dict(
             "parent_process_instance_id": None,
             "uid": 1000,
             "comm": "demo",
-            "executable": "/usr/bin/demo",
+            "executable": executable,
             "exit_seen": exit_seen,
         },
         "anomaly": {
