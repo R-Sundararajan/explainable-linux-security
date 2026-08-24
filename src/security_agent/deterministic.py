@@ -17,6 +17,8 @@ from .contracts import (
     SecurityCase,
     SecurityFactType,
     StrictFrozenModel,
+    UInt32,
+    UInt64,
 )
 
 
@@ -31,6 +33,9 @@ class TestKillStopAuthorization(StrictFrozenModel):
     """Narrow, opt-in authorization for the harmless E2E worker only."""
 
     process_instance_id: ProcessInstanceId
+    pid: Annotated[int, Field(ge=2, le=4_294_967_295)]
+    start_boottime_ns: UInt64
+    uid: UInt32
     executable: Annotated[str, StringConstraints(min_length=1, max_length=511)]
     sandbox_root: Annotated[str, StringConstraints(min_length=6, max_length=191)]
     minimum_destructive_attempts: Annotated[int, Field(ge=2, le=1_000)] = 3
@@ -49,8 +54,14 @@ class TestKillStopAuthorization(StrictFrozenModel):
             "tmp",
         ):
             raise ValueError("test sandbox under /var must be beneath /var/tmp")
+        if root.parts[:2] == ("/", "tmp") and len(root.parts) <= 2:
+            raise ValueError("test sandbox must be a unique directory beneath /tmp")
+        if root.parts[:3] == ("/", "var", "tmp") and len(root.parts) <= 3:
+            raise ValueError("test sandbox must be a unique directory beneath /var/tmp")
         if not executable.is_absolute() or ".." in executable.parts:
             raise ValueError("test executable must be an absolute normalized path")
+        if not _within(str(executable), str(root)):
+            raise ValueError("test executable must be inside its sandbox")
         return self
 
 
@@ -204,11 +215,26 @@ def evaluate_case(
     if authorization and destructive:
         identity_matches = (
             case.process.process_instance_id == authorization.process_instance_id
+            and case.process.pid == authorization.pid
+            and case.process.start_boottime_ns == authorization.start_boottime_ns
+            and case.process.uid == authorization.uid
             and case.process.executable == authorization.executable
         )
         paths_are_scoped = bool(destructive.paths) and all(
             _within(path, authorization.sandbox_root) for path in destructive.paths
         )
+        if identity_matches and paths_are_scoped:
+            findings.append(
+                _finding(
+                    case,
+                    rule_id="DG901_OPT_IN_TEST_QUARANTINE",
+                    severity=FindingSeverity.HIGH,
+                    summary="The exact opt-in test worker produced sandbox-scoped destructive evidence.",
+                    support=destructive.evidence_ids,
+                    limitations=("Authorization is valid only for the configured E2E identity.",),
+                    action_floor=ActionFloor.QUARANTINE,
+                )
+            )
         if (
             identity_matches
             and paths_are_scoped

@@ -1,0 +1,16 @@
+{
+  "scenario": "benign_activity",
+  "synthetic_evidence": true,
+  "observations": 3,
+  "transitions": [
+    {"action": "MONITOR", "execution": "NOT_REQUIRED"},
+    {"action": "MONITOR", "execution": "NOT_REQUIRED"},
+    {"action": "MONITOR", "execution": "NOT_REQUIRED"}
+  ],
+  "final_action": "MONITOR",
+  "reason_ids": ["POLICY_MODEL_UNAVAILABLE_FALLBACK"],
+  "model_status": "UNAVAILABLE",
+  "action_status": "NOT_REQUIRED",
+  "applied_signals": [],
+  "worker_terminated": null
+}

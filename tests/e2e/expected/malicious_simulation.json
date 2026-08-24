@@ -1,0 +1,14 @@
+{
+  "scenario": "malicious_simulation",
+  "synthetic_evidence": true,
+  "observations": 1,
+  "transitions": [
+    {"action": "QUARANTINE", "execution": "AUDIT_ONLY"}
+  ],
+  "final_action": "QUARANTINE",
+  "reason_ids": ["DG004_CORROBORATED_PRIVILEGE_TRANSITION"],
+  "model_status": "NOT_REQUESTED",
+  "action_status": "AUDIT_ONLY",
+  "applied_signals": [],
+  "worker_terminated": null
+}

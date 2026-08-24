@@ -6,6 +6,7 @@ from pathlib import Path
 
 import pytest
 
+from security_agent.actions import ActionExecutor
 from security_agent.audit import AuditWriter, SecurityAuditEvent
 from security_agent.case_store import CaseStore
 from security_agent.contracts import ModelResult, ModelRuntimeStatus
@@ -35,6 +36,7 @@ def audit_event() -> SecurityAuditEvent:
         schema_version="security_audit_event_v1",
         event_kind="EVIDENCE_DECISION",
         explanation=explanation,
+        action_execution=ActionExecutor().execute(policy, evidence),
         reasoner_metrics=None,
         reasoner_provenance=None,
     )

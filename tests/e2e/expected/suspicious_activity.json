@@ -1,0 +1,19 @@
+{
+  "scenario": "suspicious_activity",
+  "synthetic_evidence": true,
+  "observations": 3,
+  "transitions": [
+    {"action": "MONITOR", "execution": "NOT_REQUIRED"},
+    {"action": "MONITOR", "execution": "NOT_REQUIRED"},
+    {"action": "QUARANTINE", "execution": "AUDIT_ONLY"}
+  ],
+  "final_action": "QUARANTINE",
+  "reason_ids": [
+    "DG005_ESCALATING_MULTI_DOMAIN_ACTIVITY",
+    "POLICY_MODEL_UNAVAILABLE_FALLBACK"
+  ],
+  "model_status": "UNAVAILABLE",
+  "action_status": "AUDIT_ONLY",
+  "applied_signals": [],
+  "worker_terminated": null
+}

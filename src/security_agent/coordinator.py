@@ -5,6 +5,7 @@ from concurrent.futures import Future, ThreadPoolExecutor
 from dataclasses import dataclass
 from typing import Callable
 
+from .actions import ActionExecutor
 from .audit import SecurityAuditEvent
 from .case_store import CaseStore, CaseStoreError
 from .config import AgentConfig
@@ -68,10 +69,12 @@ class SecurityAgentCoordinator:
         config: AgentConfig,
         event_sink: EventSink,
         reasoning_provider: ReasoningProvider | None = None,
+        action_executor: ActionExecutor | None = None,
     ) -> None:
         self.config = config
         self.event_sink = event_sink
         self.reasoning_provider = reasoning_provider
+        self.action_executor = action_executor or ActionExecutor(config.actions)
         self.case_store = CaseStore(
             max_cases=config.max_cases,
             max_observations=config.max_case_observations,
@@ -133,6 +136,7 @@ class SecurityAgentCoordinator:
             model_result,
             self.config.policy,
         )
+        action_execution = self.action_executor.execute(policy, evidence)
         explanation = build_explanation(
             evidence,
             case,
@@ -144,6 +148,7 @@ class SecurityAgentCoordinator:
             schema_version="security_audit_event_v1",
             event_kind=event_kind,
             explanation=explanation,
+            action_execution=action_execution,
             reasoner_metrics=None if model_outcome is None else model_outcome.metrics,
             reasoner_provenance=(
                 None if model_outcome is None else model_outcome.provenance

@@ -5,6 +5,7 @@ from pathlib import Path
 import stat
 from typing import Literal
 
+from .actions import ActionExecution
 from .contracts import (
     ReasonerMetrics,
     ReasonerProvenance,
@@ -20,6 +21,7 @@ class SecurityAuditEvent(StrictFrozenModel):
     schema_version: Literal["security_audit_event_v1"]
     event_kind: Literal["EVIDENCE_DECISION", "MODEL_DECISION"]
     explanation: SecurityExplanation
+    action_execution: ActionExecution
     reasoner_metrics: ReasonerMetrics | None
     reasoner_provenance: ReasonerProvenance | None
 

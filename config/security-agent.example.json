@@ -17,5 +17,16 @@
     "model_action_cap": "QUARANTINE",
     "poor_quality_loss_threshold": 0
   },
+  "actions": {
+    "enabled": false,
+    "process_instance_id": null,
+    "pid": null,
+    "start_boottime_ns": null,
+    "uid": null,
+    "executable": null,
+    "sandbox_root": null,
+    "allow_quarantine": false,
+    "allow_kill_stop": false
+  },
   "model": null
 }

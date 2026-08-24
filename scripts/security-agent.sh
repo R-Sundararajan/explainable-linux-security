@@ -202,6 +202,7 @@ test_agent() {
     make -C "${ROOT_DIR}" test
     make -C "${ROOT_DIR}/kernel-telemetry-bpf" test
     PYTHONPATH="${ROOT_DIR}/src" python3 -m pytest "${ROOT_DIR}/tests/security_agent" -q
+    "${ROOT_DIR}/tests/e2e/run_all.sh"
     bash -n "${BASH_SOURCE[0]}"
 }
 

@@ -7,7 +7,12 @@ from pathlib import Path
 import pytest
 from pydantic import ValidationError
 
+from security_agent.actions import ActionEnforcementConfig
 from security_agent.config import AgentConfig, load_agent_config
+from security_agent.deterministic import (
+    DeterministicGateConfig,
+    TestKillStopAuthorization as KillStopAuthorization,
+)
 
 
 def test_default_config_is_bounded_and_uses_current_uid() -> None:
@@ -44,3 +49,43 @@ def test_config_paths_must_be_absolute(tmp_path: Path) -> None:
 
     with pytest.raises(ValidationError):
         AgentConfig(evidence_socket=Path("relative.sock"))
+
+
+def test_action_enforcement_requires_matching_exact_test_identity() -> None:
+    actions = ActionEnforcementConfig(
+        enabled=True,
+        process_instance_id="boot:77:100",
+        pid=77,
+        start_boottime_ns=100,
+        uid=1000,
+        executable="/tmp/security-agent-e2e/worker",
+        sandbox_root="/tmp/security-agent-e2e",
+        allow_quarantine=True,
+        allow_kill_stop=True,
+    )
+    with pytest.raises(ValidationError, match="deterministic test authorization"):
+        AgentConfig(actions=actions)
+
+    authorization = KillStopAuthorization(
+        process_instance_id="boot:77:100",
+        pid=77,
+        start_boottime_ns=100,
+        uid=1000,
+        executable="/tmp/security-agent-e2e/worker",
+        sandbox_root="/tmp/security-agent-e2e",
+    )
+    config = AgentConfig(
+        deterministic=DeterministicGateConfig(
+            test_kill_stop_authorization=authorization
+        ),
+        actions=actions,
+    )
+    assert config.actions.enabled
+
+
+def test_disabled_action_enforcement_cannot_hide_authorization() -> None:
+    with pytest.raises(ValidationError, match="disabled action enforcement"):
+        ActionEnforcementConfig(
+            enabled=False,
+            process_instance_id="boot:77:100",
+        )

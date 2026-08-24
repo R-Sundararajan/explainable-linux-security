@@ -116,12 +116,17 @@ def test_kill_stop_requires_exact_opt_in_identity_and_sandbox() -> None:
     )
     authorization = KillStopAuthorization(
         process_instance_id="boot:77:1",
+        pid=77,
+        start_boottime_ns=1,
+        uid=1000,
         executable="/tmp/security-agent-e2e/worker",
         sandbox_root="/tmp/security-agent-e2e",
         minimum_destructive_attempts=1 + 1,
     )
     config = DeterministicGateConfig(test_kill_stop_authorization=authorization)
-    assert evaluate_case(case, config).action_floor == ActionFloor.MONITOR
+    first = evaluate_case(case, config)
+    assert first.action_floor == ActionFloor.QUARANTINE
+    assert first.reason_ids == ("DG901_OPT_IN_TEST_QUARANTINE",)
 
     packet = evidence_dict(
         evidence_id="destructive",
@@ -165,6 +170,9 @@ def test_outside_sandbox_never_receives_test_kill_authorization() -> None:
     config = DeterministicGateConfig(
         test_kill_stop_authorization=KillStopAuthorization(
             process_instance_id="boot:77:1",
+            pid=77,
+            start_boottime_ns=1,
+            uid=1000,
             executable="/tmp/security-agent-e2e/worker",
             sandbox_root="/tmp/security-agent-e2e",
         )

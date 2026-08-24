@@ -18,7 +18,7 @@ feature engineering / anomaly pipeline (ordinary user)
 Python security agent: cases -> deterministic gate -> optional local reasoner
               |
               v
-policy -> grounded explanation -> append-only JSONL audit
+policy -> default-disabled action executor -> grounded explanation -> append-only JSONL audit
 ```
 
 The collector needs root privileges to load and attach eBPF programs. The
@@ -105,6 +105,13 @@ fully operational. Set `SECURITY_AGENT_CONFIG` to a strict JSON configuration
 derived from `config/security-agent.example.json` to configure a verified local
 subprocess model. There is no remote inference fallback. Logs, PID files, and
 the local environment stay in ignored `.runtime/` and `.venv/` directories.
+
+Action enforcement is disabled by default. The only implemented signal path is
+an explicit E2E authorization that binds one disposable sandbox worker's process
+instance ID, PID, start time, UID, executable, and sandbox root. The executor
+revalidates that identity through `/proc` and signals through a pidfd; model-only
+decisions can never authorize a signal. See `tests/e2e/README.md` and run the
+bounded A-F scenarios with `./tests/e2e/run_all.sh`.
 
 ## Build manually
 

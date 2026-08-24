@@ -1,0 +1,14 @@
+{
+  "scenario": "file_activity",
+  "synthetic_evidence": true,
+  "observations": 1,
+  "transitions": [
+    {"action": "MONITOR", "execution": "NOT_REQUIRED"}
+  ],
+  "final_action": "MONITOR",
+  "reason_ids": ["DG000_SECURITY_FACT_OBSERVED"],
+  "model_status": "NOT_REQUESTED",
+  "action_status": "NOT_REQUIRED",
+  "applied_signals": [],
+  "worker_terminated": null
+}

@@ -4,8 +4,9 @@ import json
 import os
 from pathlib import Path
 
-from pydantic import Field, field_validator
+from pydantic import Field, field_validator, model_validator
 
+from .actions import ActionEnforcementConfig
 from .case_store import (
     DEFAULT_CASE_TTL_NS,
     DEFAULT_EVIDENCE_MAX_AGE_NS,
@@ -42,6 +43,7 @@ class AgentConfig(StrictFrozenModel):
     poll_timeout_seconds: float = Field(default=0.2, gt=0, le=5)
     deterministic: DeterministicGateConfig = DeterministicGateConfig()
     policy: PolicyConfig = PolicyConfig()
+    actions: ActionEnforcementConfig = ActionEnforcementConfig()
     model: LocalRunnerConfig | None = None
 
     @field_validator("evidence_socket", "audit_path")
@@ -50,6 +52,24 @@ class AgentConfig(StrictFrozenModel):
         if not value.is_absolute():
             raise ValueError("agent runtime paths must be absolute")
         return value
+
+    @model_validator(mode="after")
+    def action_authorization_matches_gate(self) -> "AgentConfig":
+        if not self.actions.enabled:
+            return self
+        authorization = self.deterministic.test_kill_stop_authorization
+        if authorization is None:
+            raise ValueError("action enforcement requires deterministic test authorization")
+        if (
+            authorization.process_instance_id != self.actions.process_instance_id
+            or authorization.pid != self.actions.pid
+            or authorization.start_boottime_ns != self.actions.start_boottime_ns
+            or authorization.uid != self.actions.uid
+            or authorization.executable != self.actions.executable
+            or authorization.sandbox_root != self.actions.sandbox_root
+        ):
+            raise ValueError("action and deterministic test identities must match")
+        return self
 
 
 def _reject_duplicate_keys(pairs: list[tuple[str, object]]) -> dict[str, object]:

@@ -152,6 +152,9 @@ def test_kill_stop_is_only_produced_by_explicit_deterministic_authorization() ->
         DeterministicGateConfig(
             test_kill_stop_authorization=KillStopAuthorization(
                 process_instance_id="boot:77:1",
+                pid=77,
+                start_boottime_ns=1,
+                uid=1000,
                 executable="/tmp/security-agent-e2e/worker",
                 sandbox_root="/tmp/security-agent-e2e",
             )

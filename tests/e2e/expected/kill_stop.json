@@ -1,0 +1,19 @@
+{
+  "scenario": "kill_stop",
+  "synthetic_evidence": true,
+  "observations": 3,
+  "transitions": [
+    {"action": "MONITOR", "execution": "NOT_REQUIRED"},
+    {"action": "QUARANTINE", "execution": "APPLIED"},
+    {"action": "KILL_STOP", "execution": "APPLIED"}
+  ],
+  "final_action": "KILL_STOP",
+  "reason_ids": [
+    "DG901_OPT_IN_TEST_QUARANTINE",
+    "DG900_OPT_IN_TEST_KILL_STOP"
+  ],
+  "model_status": "NOT_REQUESTED",
+  "action_status": "APPLIED",
+  "applied_signals": [19, 9],
+  "worker_terminated": true
+}
