@@ -1,4 +1,4 @@
-# Linux Telemetry — C/eBPF collector with Feature Engineering IPC
+# Linux Telemetry — C/eBPF collector and telemetry IPC
 
 This version keeps the existing C + eBPF collector and adds a machine-readable
 handoff to the Feature Engineering module.
@@ -12,17 +12,15 @@ make
 
 ## Run
 
-Provision the least-privilege consumer group once, then log out and back in so
-the ordinary account receives the new supplementary group:
+From the repository root, the recommended setup command provisions the
+least-privilege consumer group and builds this collector:
 
 ```bash
-sudo groupadd --system --force linux-security
-sudo usermod --append --groups linux-security kali
+./scripts/security-agent.sh setup
 ```
 
-The collector intentionally fails at socket startup if `linux-security` does
-not exist. Group creation is deployment policy and is not performed by the C
-binary.
+Run the collector directly only for lower-layer development. It intentionally
+fails at socket startup if the setup-managed `linux-security` group is absent.
 
 ```bash
 sudo ./telemetry
@@ -89,7 +87,9 @@ priority resource-sampling capacity.
 freshness. It also reports `process_state_attribution_drops` when the bounded
 16,384-entry process-state table cannot attribute an event.
 
-Example:
+An abbreviated host-level fragment is shown below; full records also contain
+`schema_version`, `process_selection`, `process_batch`, `processes`, and the
+complete `data_quality` object:
 
 ```json
 {
@@ -146,16 +146,15 @@ Example:
 
 This collector sends raw/aggregated telemetry. It does not implement:
 
-- 28 semantic feature derivation
+- F01–F30 semantic feature derivation
 - novelty calculations
 - baseline learning
 - anomaly detection
-- Evidence Layer
-- RAG/LLM
+- evidence construction, deterministic gating, local ML, policy, or XAI
 
 Those responsibilities remain downstream.
 
-## First IPC integration test
+## Collector IPC smoke test
 
 Start the collector:
 
@@ -190,10 +189,3 @@ Run the process-coverage regression tests with:
 ```bash
 make test
 ```
-
-## Current limitation
-
-The initial IPC record is a host-window record because that is what the current
-collector already aggregates. The 28-feature contract is entity-aware. A later
-revision should expose per-process/entity window records once the Feature Engineering
-input boundary is frozen.

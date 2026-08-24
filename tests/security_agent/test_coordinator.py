@@ -66,7 +66,7 @@ class FakeReasoner:
                 backend_id="fake",
                 model_id="fake-model",
                 model_sha256=None,
-                sandbox="bubblewrap",
+                sandbox="in-process-pinned-artifact",
             ),
         )
 

@@ -91,8 +91,6 @@ setup_agent() {
     require_command clang
     require_command bpftool
     require_command pkg-config
-    require_command bwrap
-    require_command prlimit
     require_command sudo
 
     if ! getent group "${AGENT_GROUP}" >/dev/null; then

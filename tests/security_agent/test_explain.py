@@ -69,7 +69,7 @@ def model_outcome(case, *, case_id: str | None = None) -> ReasonerOutcome:
             backend_id="fixture",
             model_id="fixture-model",
             model_sha256=None,
-            sandbox="bubblewrap",
+            sandbox="in-process-pinned-artifact",
         ),
     )
 

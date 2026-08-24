@@ -633,7 +633,7 @@ class ReasonerProvenance(StrictFrozenModel):
     model_sha256: Annotated[
         str, StringConstraints(pattern=r"^[0-9a-f]{64}$")
     ] | None
-    sandbox: Literal["bubblewrap", "in-process-pinned-artifact"]
+    sandbox: Literal["in-process-pinned-artifact"]
 
 
 class ReasonerOutcome(StrictFrozenModel):

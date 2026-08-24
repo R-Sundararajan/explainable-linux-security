@@ -83,16 +83,14 @@ activity.{process_exec, process_exit, syscall_events,
 resources.{cpu_utilization, memory_bytes, io_bytes_per_sec}
 ```
 
-Selection is bounded to 20 process records and resource sampling to 64 candidates
-per collector window. The downstream code does not repeat eBPF collection or
-collector selection.
+Each transport batch contains at most 20 process records, and all meaningful
+processes are emitted across batches. Resource sampling remains bounded to 64
+candidates per collector window. The downstream code does not repeat eBPF
+collection or collector selection.
 
-The parser accepts an optional process- or resource-level
-`sampled_this_window` boolean. The current collector does **not** emit it even
-though it carries resource values forward for unsampled live processes. Therefore,
-with the current wire schema F14-F18 and F16 are marked unknown and skipped. This is
-deliberately conservative. The smallest future collector fix is to serialize its
-existing `sampled_this_window` flag; no collector redesign is needed.
+The collector emits `sampled_this_window` for each process. Unsampled processes
+carry `resources: null`, so the parser preserves those resource-derived features
+as unknown instead of treating missing measurements as zero.
 
 ## Data flow
 
@@ -295,10 +293,9 @@ hash lookups.
 | F29 privilege share | host-relative | Fraction of host UID/capset calls; small high-specificity context. | A single host event yields share 1 even when benign; maturity and low weight limit it; O(1). |
 | F30 telemetry coverage | telemetry quality | `emitted/(emitted+suppressed)`; exposes selection confidence. | Host-window proxy shared by emitted processes; weight is exactly zero; O(1). |
 
-`suppression_ratio = suppressed/(emitted+suppressed)` is retained alongside F30.
-`ringbuf_drops`, `ipc_drops`, and selection suppression remain separate fields:
-kernel-to-user loss, collector-to-reader transport loss, and intentional bounded
-selection are not interchangeable.
+`suppression_ratio = suppressed/(emitted+suppressed)` is retained alongside F30
+for schema compatibility. The current collector emits all meaningful processes
+across bounded batches and reports low-signal filtering separately.
 
 ## Centralized initial feature weights
 
@@ -390,11 +387,11 @@ one-process classifier score/update:                   33 ms CPU
 
 That is about 0.17 microseconds for feature derivation and 0.33 microseconds for
 classification per process in this optimized synthetic build. Even multiplying the
-latter two numbers by the collector's current 20-record window bound is small
-relative to a five-second interval, so the arithmetic itself did not materially add
-monitoring load in this test. This is a microbenchmark, not an end-to-end Linux/eBPF
-result; real socket parsing, cache effects, and concurrent host-load benchmarks
-remain necessary before a production overhead claim.
+latter two numbers by the collector's 20-record transport-batch bound is small.
+Windows with more meaningful processes use additional batches, so this is a
+microbenchmark, not an end-to-end Linux/eBPF result; real socket parsing, cache
+effects, and concurrent host-load benchmarks remain necessary before a production
+overhead claim.
 
 ## Failure behavior
 
@@ -416,15 +413,9 @@ remain necessary before a production overhead claim.
 
 ## Build and validation
 
-```text
+```bash
 make
 make test
-```
-```text
-sudo ./anomaly_pipeline
-```
-```text
-Try running '/usr/bin/ip addr' multiple times and see it detect the PS as Anomaly!
 ```
 
 The focused test executable covers normal/zero-duration/large-counter feature
@@ -439,14 +430,12 @@ MinGW toolchain and should be run in Linux CI.
 
 ## Known limitations
 
-- Selection suppression means downstream sees only bounded candidates; F30 exposes
-  coverage but cannot reconstruct omitted processes.
+- Low-signal filtering and bounded resource sampling can omit detail for processes
+  that have no meaningful activity or no fresh resource sample.
 - The syscall counter covers the collector's explicit filter (execve/execveat,
   ptrace, memfd_create, clone/clone3, mprotect, process_vm_writev, setns, unshare),
   not every Linux syscall.
 - Network telemetry counts socket-state events, not actual network bytes.
-- Current schema-v2 resource freshness is insufficient, so resources remain unknown
-  until `sampled_this_window` is serialized.
 - Cold start suppresses the first two observations and can delay ranking of a truly
   novel executable.
 - Executable paths can change, be unresolved, use aliases, or represent multimodal

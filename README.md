@@ -15,7 +15,7 @@ feature engineering / anomaly pipeline (ordinary user)
               |
               | process_evidence_v1 over bounded SOCK_SEQPACKET
               v
-Python security agent: cases -> deterministic gate -> optional local reasoner
+Python security agent: cases -> deterministic gate -> local tabular ML
               |
               v
 policy -> default-disabled action executor -> grounded explanation -> append-only JSONL audit
@@ -38,7 +38,7 @@ Only one anomaly-pipeline consumer is supported at a time. Extra clients are rej
 - `anomaly_classifier/` — anomaly scoring, attribution, and ranking.
 - `anomaly_pipeline.c` — unprivileged reader-to-classifier runtime.
 - `evidence/` and `schemas/` — authoritative bounded C-to-Python evidence contract.
-- `src/security_agent/` — ingestion, cases, gate, local reasoner, policy, XAI, coordinator, and audit runtime.
+- `src/security_agent/` — ingestion, cases, deterministic gate, local tabular ML, policy, XAI, coordinator, and audit runtime.
 - `scripts/security-agent.sh` — repository-local setup and lifecycle command.
 - `tests/` — C, Python, contract, integration, and adversarial-safe tests.
 - `workflow.md` — detailed feature and scoring contract.
@@ -57,7 +57,7 @@ Install the required build tools, eBPF libraries, and Python runtime:
 ```bash
 sudo apt update
 sudo apt install build-essential clang llvm bpftool \
-  libbpf-dev libelf-dev zlib1g-dev pkg-config bubblewrap util-linux sudo \
+  libbpf-dev libelf-dev zlib1g-dev pkg-config sudo \
   python3 python3-venv
 ```
 
@@ -67,7 +67,7 @@ For the Python security agent and local ML model, install the following (availab
 sudo apt install python3-pydantic python3-joblib python3-psutil python3-sklearn \
   python3-pytest python3-jsonschema
 # Optional: for evaluation charts
-sudo apt install python3-matplotlib 
+sudo apt install python3-matplotlib
 ```
 
 ### Kernel Requirements
@@ -113,7 +113,7 @@ sudo -v
 
 ## 4. Build Steps
 
-If you prefer to build the components manually without the setup script, use the standard Makefiles. 
+If you prefer to build the components manually without the setup script, use the standard Makefiles.
 
 ```bash
 # Build and test the privileged eBPF collector
