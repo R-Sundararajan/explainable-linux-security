@@ -12,6 +12,9 @@
 #include "baseline_manager/baseline_manager.h"
 #include "feature_engineering/feature_engineering.h"
 #include "feature_engineering/telemetry_reader.h"
+#include "evidence/evidence_builder.h"
+#include "evidence/evidence_json.h"
+#include "evidence/evidence_sink.h"
 
 static volatile sig_atomic_t stopping = 0;
 
@@ -19,6 +22,7 @@ typedef struct {
     fe_engine_t *features;
     baseline_manager_t *baselines;
     anomaly_classifier_config_t classifier;
+    evidence_sink_t evidence_sink;
 } pipeline_t;
 
 static void handle_signal(int signal_number)
@@ -105,32 +109,96 @@ static void emit_results(const fe_host_window_t *window,
     fflush(stdout);
 }
 
+static const fe_process_record_t *find_process_record(
+    const fe_host_window_t *window,
+    const char *process_instance_id
+)
+{
+    size_t index;
+
+    for (index = 0; index < window->process_count; index++) {
+        if (strcmp(window->processes[index].process_instance_id,
+                   process_instance_id) == 0)
+            return &window->processes[index];
+    }
+    return NULL;
+}
+
+static int compare_anomaly_results(const void *left, const void *right)
+{
+    const anomaly_result_t *a = left;
+    const anomaly_result_t *b = right;
+
+    if (a->anomaly_score < b->anomaly_score)
+        return 1;
+    if (a->anomaly_score > b->anomaly_score)
+        return -1;
+    return strcmp(a->process_instance_id, b->process_instance_id);
+}
+
 static void process_window(const fe_host_window_t *window, void *context)
 {
     pipeline_t *pipeline = context;
     feature_vector_t vectors[FE_MAX_PROCESSES];
     anomaly_result_t results[FE_MAX_PROCESSES];
+    char evidence_json[EVIDENCE_MAX_PACKET_SIZE];
     size_t vector_count = 0;
     size_t result_count = 0;
+    size_t evidence_sent = 0;
+    size_t evidence_dropped = 0;
+    size_t index;
     if (fe_engine_process_window(pipeline->features, window, vectors,
                                  FE_MAX_PROCESSES, &vector_count) < 0) {
         fputs("[WARN] feature derivation rejected a telemetry window\n", stderr);
         return;
     }
-    if (anomaly_classifier_rank_window(pipeline->baselines,
-                                       &pipeline->classifier,
-                                       vectors, vector_count, results,
-                                       FE_MAX_PROCESSES, &result_count) < 0) {
-        fputs("[WARN] anomaly classification failed\n", stderr);
-        return;
+    for (index = 0; index < vector_count; index++) {
+        const fe_process_record_t *process;
+        anomaly_result_t result;
+        process_evidence_t evidence;
+        size_t evidence_length = 0;
+        bool anomalous = false;
+        int send_status;
+
+        if (anomaly_classifier_score(pipeline->baselines,
+                                     &pipeline->classifier,
+                                     &vectors[index], &result,
+                                     &anomalous) < 0) {
+            fputs("[WARN] anomaly classification failed\n", stderr);
+            return;
+        }
+        process = find_process_record(window,
+                                      vectors[index].process_instance_id);
+        if (!process ||
+            evidence_builder_build(window, process, &vectors[index], &result,
+                                   pipeline->classifier.threshold,
+                                   anomalous, &evidence) < 0 ||
+            evidence_json_serialize(&evidence, evidence_json,
+                                    sizeof(evidence_json),
+                                    &evidence_length) < 0) {
+            fputs("[WARN] rejected inconsistent process evidence\n", stderr);
+            evidence_dropped++;
+        } else {
+            send_status = evidence_sink_send(&pipeline->evidence_sink,
+                                             evidence_json,
+                                             evidence_length);
+            if (send_status == 1)
+                evidence_sent++;
+            else
+                evidence_dropped++;
+        }
+        if (anomalous)
+            results[result_count++] = result;
     }
+    qsort(results, result_count, sizeof(results[0]), compare_anomaly_results);
     emit_results(window, results, result_count);
     (void)fprintf(stderr,
                   "anomaly pipeline: processed window_end_ns=%llu "
                   "telemetry_processes=%zu feature_vectors=%zu "
-                  "anomalies=%zu\n",
+                  "anomalies=%zu evidence_sent=%zu evidence_dropped=%zu\n",
                   (unsigned long long)window->window_end_ns,
-                  window->process_count, vector_count, result_count);
+                  window->process_count, vector_count, result_count,
+                  evidence_sent, evidence_dropped);
 }
 
 static void retry_pause(void)
@@ -159,6 +227,8 @@ static void report_connect_failure(const char *socket_path, int error_number)
 int main(int argc, char **argv)
 {
     const char *socket_path = argc > 1 ? argv[1] : TELEMETRY_SOCKET_PATH;
+    const char *evidence_path = argc > 2 ? argv[2] :
+        getenv("LINUX_SECURITY_EVIDENCE_SOCKET");
     telemetry_reader_t *reader = NULL;
     pipeline_t pipeline;
     fe_config_t feature_config;
@@ -173,6 +243,7 @@ int main(int argc, char **argv)
     fe_config_default(&feature_config);
     baseline_config_default(&baseline_config);
     anomaly_classifier_config_default(&pipeline.classifier);
+    evidence_sink_init(&pipeline.evidence_sink, evidence_path);
     pipeline.features = fe_engine_create(&feature_config);
     pipeline.baselines = baseline_manager_create(&baseline_config);
     reader = malloc(sizeof(*reader));
@@ -184,11 +255,12 @@ int main(int argc, char **argv)
     telemetry_reader_init(reader, socket_path);
     (void)fprintf(stderr,
                   "anomaly pipeline: socket=%s baseline_memory=%zu "
-                  "temporal_memory=%zu threshold=%.3f\n",
+                  "temporal_memory=%zu threshold=%.3f evidence_socket=%s\n",
                   socket_path,
                   baseline_manager_memory_bytes(pipeline.baselines),
                   fe_engine_memory_bytes(pipeline.features),
-                  pipeline.classifier.threshold);
+                  pipeline.classifier.threshold,
+                  pipeline.evidence_sink.socket_path);
     while (!stopping) {
         int status;
         int pump_error = 0;
@@ -248,6 +320,19 @@ int main(int argc, char **argv)
     }
 
 cleanup:
+    {
+        evidence_sink_stats_t evidence_stats;
+        evidence_sink_get_stats(&pipeline.evidence_sink, &evidence_stats);
+        (void)fprintf(stderr,
+                      "evidence sink: sent=%llu dropped=%llu no_consumer=%llu "
+                      "backpressure=%llu oversized=%llu\n",
+                      (unsigned long long)evidence_stats.packets_sent,
+                      (unsigned long long)evidence_stats.packets_dropped,
+                      (unsigned long long)evidence_stats.no_consumer,
+                      (unsigned long long)evidence_stats.backpressure_drops,
+                      (unsigned long long)evidence_stats.oversized_packets);
+        evidence_sink_close(&pipeline.evidence_sink);
+    }
     if (reader) {
         telemetry_reader_close(reader);
         free(reader);

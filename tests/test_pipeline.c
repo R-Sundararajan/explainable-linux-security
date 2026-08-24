@@ -47,15 +47,22 @@ static const char realistic_json[] =
     "\"system\":{\"cpu_utilization\":0.2,\"memory_usage\":0.3,"
     "\"io_bytes_per_sec\":1000.0},\"process_selection\":{"
     "\"max_records\":20,\"records_emitted\":1,"
-    "\"records_suppressed\":1},\"processes\":[{\"pid\":42,"
+    "\"records_suppressed\":1},\"process_batch\":{\"index\":0,"
+    "\"count\":2,\"records_in_batch\":1,\"max_records_per_batch\":20},"
+    "\"processes\":[{\"pid\":42,"
     "\"ppid\":1,\"uid\":1000,\"start_boottime_ns\":500000000,"
     "\"process_instance_id\":\"boot:42:500000000\",\"comm\":\"demo\","
-    "\"exe\":\"/usr/bin/demo\",\"security_relevant\":false,"
+    "\"exe\":\"/usr/bin/demo\",\"executable_resolved\":true,"
+    "\"security_relevant\":false,"
     "\"exit_seen\":false,\"sampled_this_window\":true,\"activity\":{"
     "\"process_exec\":1,\"process_exit\":0,\"syscall_events\":50,"
     "\"file_write_events\":10,\"file_write_bytes\":2048,"
     "\"file_create\":1,\"file_delete\":1,\"file_rename\":0,"
-    "\"net_state\":2,\"uid_change\":0,\"capset\":1},\"resources\":{"
+    "\"net_state\":2,\"uid_change\":0,\"capset\":1},"
+    "\"security_facts\":[{\"type\":\"CAPSET_ATTEMPT\",\"count\":1,"
+    "\"first_observed_ns\":2000000000,\"last_observed_ns\":2000000000,"
+    "\"target_pid\":null,\"path\":null}],\"security_fact_overflow\":0,"
+    "\"resources\":{"
     "\"cpu_utilization\":0.1,\"memory_bytes\":1048576,"
     "\"io_bytes_per_sec\":512.0}}],\"data_quality\":{"
     "\"ringbuf_drops\":2,\"ipc_drops\":3,\"ipc_no_consumer\":4,"
@@ -70,6 +77,7 @@ static void fill_window(fe_host_window_t *window, uint64_t start,
     fe_process_record_t *process;
     memset(window, 0, sizeof(*window));
     window->schema_version = 2;
+    window->timestamp_ns = UINT64_C(1700000000000000000);
     snprintf(window->host_id, sizeof(window->host_id), "host-a");
     window->window_start_ns = start;
     window->window_end_ns = end;
@@ -83,12 +91,16 @@ static void fill_window(fe_host_window_t *window, uint64_t start,
     window->process_records_emitted = 1;
     window->process_records_suppressed = 1;
     window->process_count = 1;
+    window->batch_count = 1;
+    window->records_in_batch = 1;
+    window->max_records_per_batch = 20;
     process = &window->processes[0];
     process->pid = 42;
     process->start_boottime_ns = 500000000;
     snprintf(process->process_instance_id,
              sizeof(process->process_instance_id), "boot:42:500000000");
     snprintf(process->exe, sizeof(process->exe), "/usr/bin/demo");
+    process->executable_resolved = true;
     process->activity.valid_mask = all_counter_bits;
     process->activity.process_exec = 1;
     process->activity.syscall_events = 50;
@@ -120,6 +132,11 @@ static int test_parser_and_stream(void)
     ASSERT_TRUE(window.schema_version == 2);
     ASSERT_TRUE(window.process_count == 1);
     ASSERT_TRUE(window.processes[0].resource_sample_fresh);
+    ASSERT_TRUE(window.processes[0].executable_resolved);
+    ASSERT_TRUE(window.processes[0].security_fact_count == 1);
+    ASSERT_TRUE(window.processes[0].security_facts[0].type ==
+                FE_SECURITY_FACT_CAPSET_ATTEMPT);
+    ASSERT_TRUE(window.batch_count == 2 && window.records_in_batch == 1);
     ASSERT_TRUE(window.ringbuf_drops == 2 && window.ipc_drops == 3);
     ASSERT_TRUE(window.process_records_suppressed == 1);
     ASSERT_TRUE(window.processes[0].activity.file_write_bytes == 2048);

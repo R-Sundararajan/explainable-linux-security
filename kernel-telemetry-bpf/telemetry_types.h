@@ -54,6 +54,7 @@ struct telemetry_event {
 
         struct {
             unsigned long long syscall_id;
+            unsigned long long arg0;
         } syscall;
 
         struct {

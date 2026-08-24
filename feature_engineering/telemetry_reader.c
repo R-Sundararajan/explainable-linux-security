@@ -531,6 +531,88 @@ static void parse_activity(const char *json, const json_token_t *tokens,
 #undef PARSE_COUNTER
 }
 
+static fe_security_fact_type_t security_fact_type_from_name(const char *name)
+{
+    if (strcmp(name, "PTRACE_ATTEMPT") == 0)
+        return FE_SECURITY_FACT_PTRACE_ATTEMPT;
+    if (strcmp(name, "PROCESS_VM_WRITEV_ATTEMPT") == 0)
+        return FE_SECURITY_FACT_PROCESS_VM_WRITEV_ATTEMPT;
+    if (strcmp(name, "MEMFD_CREATE_ATTEMPT") == 0)
+        return FE_SECURITY_FACT_MEMFD_CREATE_ATTEMPT;
+    if (strcmp(name, "SETNS_ATTEMPT") == 0)
+        return FE_SECURITY_FACT_SETNS_ATTEMPT;
+    if (strcmp(name, "UNSHARE_ATTEMPT") == 0)
+        return FE_SECURITY_FACT_UNSHARE_ATTEMPT;
+    if (strcmp(name, "UID_OR_GID_CHANGE_ATTEMPT") == 0)
+        return FE_SECURITY_FACT_UID_OR_GID_CHANGE_ATTEMPT;
+    if (strcmp(name, "CAPSET_ATTEMPT") == 0)
+        return FE_SECURITY_FACT_CAPSET_ATTEMPT;
+    if (strcmp(name, "CREDENTIAL_PATH_MUTATION_ATTEMPT") == 0)
+        return FE_SECURITY_FACT_CREDENTIAL_PATH_MUTATION_ATTEMPT;
+    if (strcmp(name, "PERSISTENCE_PATH_WRITE_ATTEMPT") == 0)
+        return FE_SECURITY_FACT_PERSISTENCE_PATH_WRITE_ATTEMPT;
+    if (strcmp(name, "PROTECTED_AGENT_PATH_WRITE_ATTEMPT") == 0)
+        return FE_SECURITY_FACT_PROTECTED_AGENT_PATH_WRITE_ATTEMPT;
+    if (strcmp(name, "DESTRUCTIVE_FILE_ACTIVITY_ATTEMPT") == 0)
+        return FE_SECURITY_FACT_DESTRUCTIVE_FILE_ACTIVITY_ATTEMPT;
+    return FE_SECURITY_FACT_UNKNOWN;
+}
+
+static int parse_security_facts(const char *json,
+                                const json_token_t *tokens,
+                                int count, int array,
+                                fe_process_record_t *process)
+{
+    int index;
+
+    if (array < 0)
+        return 0;
+    if (tokens[array].type != JT_ARRAY)
+        return -1;
+    for (index = array + 1; index < count; index++) {
+        fe_security_fact_t *fact;
+        char name[64];
+        uint64_t integer;
+        int value;
+
+        if (tokens[index].parent != array)
+            continue;
+        if (tokens[index].type != JT_OBJECT ||
+            process->security_fact_count >= FE_MAX_SECURITY_FACTS)
+            return -1;
+        fact = &process->security_facts[process->security_fact_count];
+        memset(fact, 0, sizeof(*fact));
+        value = object_value(json, tokens, count, index, "type");
+        if (value < 0 || copy_json_string(json, &tokens[value], name,
+                                         sizeof(name)) < 0)
+            return -1;
+        fact->type = security_fact_type_from_name(name);
+        if (fact->type == FE_SECURITY_FACT_UNKNOWN ||
+            get_u64_field(json, tokens, count, index, "count",
+                          &fact->count) < 0 || fact->count == 0 ||
+            get_u64_field(json, tokens, count, index, "first_observed_ns",
+                          &fact->first_observed_ns) < 0 ||
+            get_u64_field(json, tokens, count, index, "last_observed_ns",
+                          &fact->last_observed_ns) < 0 ||
+            fact->last_observed_ns < fact->first_observed_ns)
+            return -1;
+        if (get_u64_field(json, tokens, count, index, "target_pid",
+                          &integer) == 0) {
+            if (integer > UINT32_MAX)
+                return -1;
+            fact->target_pid = (uint32_t)integer;
+            fact->target_pid_present = true;
+        }
+        value = object_value(json, tokens, count, index, "path");
+        if (value >= 0 && copy_json_string(json, &tokens[value], fact->path,
+                                          sizeof(fact->path)) == 0 &&
+            fact->path[0] != '\0')
+            fact->path_present = true;
+        process->security_fact_count++;
+    }
+    return 0;
+}
+
 static int parse_process(const char *json, const json_token_t *tokens,
                          int count, int object, fe_process_record_t *process)
 {
@@ -540,6 +622,7 @@ static int parse_process(const char *json, const json_token_t *tokens,
     uint64_t integer;
     bool fresh = false;
     bool exit_seen = false;
+    bool executable_resolved = false;
 
     memset(process, 0, sizeof(*process));
     if (get_u64_field(json, tokens, count, object, "pid", &integer) == 0 &&
@@ -566,6 +649,10 @@ static int parse_process(const char *json, const json_token_t *tokens,
     if (index >= 0)
         (void)copy_json_string(json, &tokens[index], process->exe,
                                sizeof(process->exe));
+    index = object_value(json, tokens, count, object, "executable_resolved");
+    if (index >= 0 &&
+        token_to_bool(json, &tokens[index], &executable_resolved) == 0)
+        process->executable_resolved = executable_resolved;
     index = object_value(json, tokens, count, object, "exit_seen");
     if (index >= 0 && token_to_bool(json, &tokens[index], &exit_seen) == 0)
         process->exit_seen = exit_seen;
@@ -590,6 +677,12 @@ static int parse_process(const char *json, const json_token_t *tokens,
                              "sampled_this_window");
     if (index >= 0 && token_to_bool(json, &tokens[index], &fresh) == 0)
         process->resource_sample_fresh = fresh;
+    index = object_value(json, tokens, count, object, "security_facts");
+    if (parse_security_facts(json, tokens, count, index, process) < 0)
+        return -1;
+    (void)get_u64_field(json, tokens, count, object,
+                        "security_fact_overflow",
+                        &process->security_fact_overflow);
     return 0;
 }
 
@@ -602,6 +695,7 @@ int telemetry_parse_json(const char *json, size_t length,
     int telemetry;
     int processes;
     int quality;
+    int batch;
     uint64_t integer;
     size_t process_count = 0;
 
@@ -644,7 +738,42 @@ int telemetry_parse_json(const char *json, size_t length,
                             &window->ringbuf_drops);
         (void)get_u64_field(json, tokens, count, quality, "ipc_drops",
                             &window->ipc_drops);
+        (void)get_u64_field(json, tokens, count, quality, "ipc_no_consumer",
+                            &window->ipc_no_consumer);
+        (void)get_u64_field(json, tokens, count, quality,
+                            "ipc_backpressure_drops",
+                            &window->ipc_backpressure_drops);
+        (void)get_u64_field(json, tokens, count, quality,
+                            "ipc_disconnect_drops",
+                            &window->ipc_disconnect_drops);
+        (void)get_u64_field(json, tokens, count, quality,
+                            "ipc_send_error_drops",
+                            &window->ipc_send_error_drops);
+        (void)get_u64_field(json, tokens, count, quality,
+                            "ipc_partial_write_drops",
+                            &window->ipc_partial_write_drops);
+        (void)get_u64_field(json, tokens, count, quality,
+                            "ipc_rejected_clients",
+                            &window->ipc_rejected_clients);
+        (void)get_u64_field(json, tokens, count, quality,
+                            "process_state_attribution_drops",
+                            &window->process_state_attribution_drops);
+        (void)get_u64_field(json, tokens, count, quality,
+                            "process_records_filtered_low_signal",
+                            &window->process_records_filtered_low_signal);
         window->quality_present = emitted && suppressed;
+    }
+    batch = object_value(json, tokens, count, 0, "process_batch");
+    if (batch >= 0 && tokens[batch].type == JT_OBJECT) {
+        (void)get_u64_field(json, tokens, count, batch, "index",
+                            &window->batch_index);
+        (void)get_u64_field(json, tokens, count, batch, "count",
+                            &window->batch_count);
+        (void)get_u64_field(json, tokens, count, batch, "records_in_batch",
+                            &window->records_in_batch);
+        (void)get_u64_field(json, tokens, count, batch,
+                            "max_records_per_batch",
+                            &window->max_records_per_batch);
     }
 
     processes = object_value(json, tokens, count, 0, "processes");
@@ -655,8 +784,9 @@ int telemetry_parse_json(const char *json, size_t length,
             continue;
         if (tokens[index].type != JT_OBJECT || process_count >= FE_MAX_PROCESSES)
             return -1;
-        (void)parse_process(json, tokens, count, index,
-                            &window->processes[process_count]);
+        if (parse_process(json, tokens, count, index,
+                          &window->processes[process_count]) < 0)
+            return -1;
         process_count++;
     }
     window->process_count = process_count;

@@ -1,0 +1,283 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://example.invalid/linux-security/process_evidence_v1.schema.json",
+  "title": "Linux Security Process Evidence v1",
+  "type": "object",
+  "additionalProperties": false,
+  "required": [
+    "schema_version",
+    "evidence_id",
+    "emitted_realtime_ns",
+    "host_id",
+    "window",
+    "process",
+    "anomaly",
+    "features",
+    "activity",
+    "host_activity",
+    "resources",
+    "security_facts",
+    "security_fact_overflow",
+    "telemetry_quality",
+    "batching",
+    "missing_evidence_codes",
+    "provenance"
+  ],
+  "properties": {
+    "schema_version": { "const": "process_evidence_v1" },
+    "evidence_id": { "type": "string", "minLength": 1, "maxLength": 383 },
+    "emitted_realtime_ns": { "$ref": "#/$defs/u64" },
+    "host_id": { "type": "string", "minLength": 1, "maxLength": 127 },
+    "window": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["clock", "start_ns", "end_ns"],
+      "properties": {
+        "clock": { "const": "monotonic_boot_ns" },
+        "start_ns": { "$ref": "#/$defs/u64" },
+        "end_ns": { "$ref": "#/$defs/u64" }
+      }
+    },
+    "process": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "process_instance_id",
+        "pid",
+        "start_boottime_ns",
+        "ppid",
+        "parent_process_instance_id",
+        "uid",
+        "comm",
+        "executable",
+        "exit_seen"
+      ],
+      "properties": {
+        "process_instance_id": { "type": "string", "minLength": 1, "maxLength": 127 },
+        "pid": { "$ref": "#/$defs/u32" },
+        "start_boottime_ns": { "$ref": "#/$defs/u64" },
+        "ppid": { "$ref": "#/$defs/u32" },
+        "parent_process_instance_id": {
+          "oneOf": [
+            { "type": "string", "minLength": 1, "maxLength": 127 },
+            { "type": "null" }
+          ]
+        },
+        "uid": { "$ref": "#/$defs/u32" },
+        "comm": { "type": "string", "maxLength": 63 },
+        "executable": {
+          "oneOf": [
+            { "type": "string", "minLength": 1, "maxLength": 511 },
+            { "type": "null" }
+          ]
+        },
+        "exit_seen": { "type": "boolean" }
+      }
+    },
+    "anomaly": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "score",
+        "configured_threshold",
+        "threshold_crossed",
+        "baseline_maturity",
+        "baseline_observations",
+        "top_contributions"
+      ],
+      "properties": {
+        "score": { "type": "number", "minimum": 0 },
+        "configured_threshold": { "type": "number", "minimum": 0 },
+        "threshold_crossed": { "type": "boolean" },
+        "baseline_maturity": { "enum": ["COLD", "WARMING", "MATURE"] },
+        "baseline_observations": { "$ref": "#/$defs/u32" },
+        "top_contributions": {
+          "type": "array",
+          "maxItems": 3,
+          "items": { "$ref": "#/$defs/feature_contribution" }
+        }
+      }
+    },
+    "features": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["valid_mask", "values"],
+      "properties": {
+        "valid_mask": { "$ref": "#/$defs/u64" },
+        "values": {
+          "type": "array",
+          "maxItems": 30,
+          "items": { "$ref": "#/$defs/feature_value" }
+        }
+      }
+    },
+    "activity": { "$ref": "#/$defs/activity" },
+    "host_activity": { "$ref": "#/$defs/activity" },
+    "resources": { "$ref": "#/$defs/resources" },
+    "security_facts": {
+      "type": "array",
+      "maxItems": 12,
+      "items": { "$ref": "#/$defs/security_fact" }
+    },
+    "security_fact_overflow": { "$ref": "#/$defs/u64" },
+    "telemetry_quality": { "$ref": "#/$defs/telemetry_quality" },
+    "batching": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["index", "count", "records_in_batch", "max_records_per_batch"],
+      "properties": {
+        "index": { "$ref": "#/$defs/u64" },
+        "count": { "$ref": "#/$defs/u64" },
+        "records_in_batch": { "$ref": "#/$defs/u64" },
+        "max_records_per_batch": { "$ref": "#/$defs/u64" }
+      }
+    },
+    "missing_evidence_codes": {
+      "type": "array",
+      "maxItems": 12,
+      "uniqueItems": true,
+      "items": {
+        "enum": [
+          "PARENT_PROCESS_INSTANCE_ID_UNAVAILABLE",
+          "EXECUTABLE_IDENTITY_UNAVAILABLE",
+          "RESOURCE_SAMPLE_UNAVAILABLE_OR_STALE",
+          "TELEMETRY_QUALITY_UNAVAILABLE",
+          "RING_BUFFER_DATA_LOSS",
+          "TELEMETRY_TRANSPORT_DATA_LOSS",
+          "SECURITY_FACT_DETAIL_TRUNCATED",
+          "FEATURE_VECTOR_PARTIALLY_UNAVAILABLE",
+          "BASELINE_NOT_MATURE",
+          "HOST_WINDOW_SPLIT_ACROSS_BATCHES"
+        ]
+      }
+    },
+    "provenance": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["collector_schema_version", "builder", "builder_version"],
+      "properties": {
+        "collector_schema_version": { "const": 2 },
+        "builder": { "const": "c-evidence-builder" },
+        "builder_version": { "const": "1.0.0" }
+      }
+    }
+  },
+  "$defs": {
+    "u32": { "type": "integer", "minimum": 0, "maximum": 4294967295 },
+    "u64": { "type": "integer", "minimum": 0 },
+    "feature_value": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["feature_id", "feature", "value"],
+      "properties": {
+        "feature_id": { "type": "integer", "minimum": 1, "maximum": 30 },
+        "feature": { "type": "string", "minLength": 1, "maxLength": 63 },
+        "value": { "type": "number" }
+      }
+    },
+    "feature_contribution": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["feature_id", "feature", "delta", "weight", "contribution"],
+      "properties": {
+        "feature_id": { "type": "integer", "minimum": 1, "maximum": 30 },
+        "feature": { "type": "string", "minLength": 1, "maxLength": 63 },
+        "delta": { "type": "number" },
+        "weight": { "type": "number", "minimum": 0 },
+        "contribution": { "type": "number", "minimum": 0 }
+      }
+    },
+    "activity": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "valid_mask", "process_exec", "process_exit", "syscall_events",
+        "file_write_events", "file_write_bytes", "file_create", "file_delete",
+        "file_rename", "net_state", "uid_change", "capset"
+      ],
+      "properties": {
+        "valid_mask": { "$ref": "#/$defs/u32" },
+        "process_exec": { "$ref": "#/$defs/u64" },
+        "process_exit": { "$ref": "#/$defs/u64" },
+        "syscall_events": { "$ref": "#/$defs/u64" },
+        "file_write_events": { "$ref": "#/$defs/u64" },
+        "file_write_bytes": { "$ref": "#/$defs/u64" },
+        "file_create": { "$ref": "#/$defs/u64" },
+        "file_delete": { "$ref": "#/$defs/u64" },
+        "file_rename": { "$ref": "#/$defs/u64" },
+        "net_state": { "$ref": "#/$defs/u64" },
+        "uid_change": { "$ref": "#/$defs/u64" },
+        "capset": { "$ref": "#/$defs/u64" }
+      }
+    },
+    "resources": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["present", "fresh", "cpu_utilization", "memory_bytes", "io_bytes_per_sec"],
+      "properties": {
+        "present": { "type": "boolean" },
+        "fresh": { "type": "boolean" },
+        "cpu_utilization": { "type": ["number", "null"], "minimum": 0 },
+        "memory_bytes": {
+          "oneOf": [{ "$ref": "#/$defs/u64" }, { "type": "null" }]
+        },
+        "io_bytes_per_sec": { "type": ["number", "null"], "minimum": 0 }
+      }
+    },
+    "security_fact": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["type", "count", "first_observed_ns", "last_observed_ns", "target_pid", "path"],
+      "properties": {
+        "type": {
+          "enum": [
+            "PTRACE_ATTEMPT",
+            "PROCESS_VM_WRITEV_ATTEMPT",
+            "MEMFD_CREATE_ATTEMPT",
+            "SETNS_ATTEMPT",
+            "UNSHARE_ATTEMPT",
+            "UID_OR_GID_CHANGE_ATTEMPT",
+            "CAPSET_ATTEMPT",
+            "CREDENTIAL_PATH_MUTATION_ATTEMPT",
+            "PERSISTENCE_PATH_WRITE_ATTEMPT",
+            "PROTECTED_AGENT_PATH_WRITE_ATTEMPT",
+            "DESTRUCTIVE_FILE_ACTIVITY_ATTEMPT"
+          ]
+        },
+        "count": { "type": "integer", "minimum": 1 },
+        "first_observed_ns": { "$ref": "#/$defs/u64" },
+        "last_observed_ns": { "$ref": "#/$defs/u64" },
+        "target_pid": {
+          "oneOf": [{ "$ref": "#/$defs/u32" }, { "type": "null" }]
+        },
+        "path": { "type": ["string", "null"], "maxLength": 191 }
+      }
+    },
+    "telemetry_quality": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "present", "ringbuf_drops", "ipc_drops", "ipc_no_consumer",
+        "ipc_backpressure_drops", "ipc_disconnect_drops", "ipc_send_error_drops",
+        "ipc_partial_write_drops", "ipc_rejected_clients",
+        "process_state_attribution_drops", "process_records_emitted",
+        "process_records_suppressed", "process_records_filtered_low_signal"
+      ],
+      "properties": {
+        "present": { "type": "boolean" },
+        "ringbuf_drops": { "$ref": "#/$defs/u64" },
+        "ipc_drops": { "$ref": "#/$defs/u64" },
+        "ipc_no_consumer": { "$ref": "#/$defs/u64" },
+        "ipc_backpressure_drops": { "$ref": "#/$defs/u64" },
+        "ipc_disconnect_drops": { "$ref": "#/$defs/u64" },
+        "ipc_send_error_drops": { "$ref": "#/$defs/u64" },
+        "ipc_partial_write_drops": { "$ref": "#/$defs/u64" },
+        "ipc_rejected_clients": { "$ref": "#/$defs/u64" },
+        "process_state_attribution_drops": { "$ref": "#/$defs/u64" },
+        "process_records_emitted": { "$ref": "#/$defs/u64" },
+        "process_records_suppressed": { "$ref": "#/$defs/u64" },
+        "process_records_filtered_low_signal": { "$ref": "#/$defs/u64" }
+      }
+    }
+  }
+}

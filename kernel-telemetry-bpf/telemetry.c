@@ -39,6 +39,7 @@ static int verbose = 0;
 #define MAX_PROCESS_RECORDS_PER_BATCH 20U
 #define MAX_RESOURCE_SAMPLES 64U
 #define ROTATION_MIN_SAMPLES 16U
+#define MAX_SECURITY_FACTS_PER_PROCESS 12U
 
 #define PROCESS_ACTIVITY_MIN_SYSCALLS 10ULL
 #define PROCESS_ACTIVITY_MIN_WRITES 5ULL
@@ -65,6 +66,33 @@ struct window_counters {
     unsigned long long net_state;
     unsigned long long uid_change;
     unsigned long long capset;
+};
+
+enum collected_security_fact_type {
+    SECURITY_FACT_PTRACE_ATTEMPT = 1,
+    SECURITY_FACT_PROCESS_VM_WRITEV_ATTEMPT,
+    SECURITY_FACT_MEMFD_CREATE_ATTEMPT,
+    SECURITY_FACT_SETNS_ATTEMPT,
+    SECURITY_FACT_UNSHARE_ATTEMPT,
+    SECURITY_FACT_UID_OR_GID_CHANGE_ATTEMPT,
+    SECURITY_FACT_CAPSET_ATTEMPT,
+    SECURITY_FACT_CREDENTIAL_PATH_MUTATION_ATTEMPT,
+    SECURITY_FACT_PERSISTENCE_PATH_WRITE_ATTEMPT,
+    SECURITY_FACT_PROTECTED_AGENT_PATH_WRITE_ATTEMPT,
+    SECURITY_FACT_DESTRUCTIVE_FILE_ACTIVITY_ATTEMPT
+};
+
+static const char *security_fact_name(enum collected_security_fact_type type);
+
+struct collected_security_fact {
+    enum collected_security_fact_type type;
+    unsigned long long count;
+    unsigned long long first_observed_ns;
+    unsigned long long last_observed_ns;
+    unsigned int target_pid;
+    int target_pid_present;
+    char path[TELEMETRY_PATH_LEN];
+    int path_present;
 };
 
 static struct window_counters counters;
@@ -104,6 +132,9 @@ struct process_state {
     unsigned long long last_activity_ns;
 
     struct window_counters window;
+    struct collected_security_fact security_facts[MAX_SECURITY_FACTS_PER_PROCESS];
+    size_t security_fact_count;
+    unsigned long long security_fact_overflow;
     int exit_seen;
 };
 
@@ -643,11 +674,50 @@ static int append_process_json(char *out, size_t out_sz, size_t *used, const str
     if (append_json(out, out_sz, used, ",\"exe\":") < 0) return -1;
     if (append_json_escaped(out, out_sz, used,
                             p->executable[0] ? p->executable : p->comm) < 0) return -1;
-    if (append_json(out, out_sz, used, ",\"security_relevant\":%s,\"exit_seen\":%s,\"sampled_this_window\":%s,\"activity\":{\"process_exec\":%llu,\"process_exit\":%llu,\"syscall_events\":%llu,\"file_write_events\":%llu,\"file_write_bytes\":%llu,\"file_create\":%llu,\"file_delete\":%llu,\"file_rename\":%llu,\"net_state\":%llu,\"uid_change\":%llu,\"capset\":%llu}",
+    if (append_json(out, out_sz, used, ",\"executable_resolved\":%s,\"security_relevant\":%s,\"exit_seen\":%s,\"sampled_this_window\":%s,\"activity\":{\"process_exec\":%llu,\"process_exit\":%llu,\"syscall_events\":%llu,\"file_write_events\":%llu,\"file_write_bytes\":%llu,\"file_create\":%llu,\"file_delete\":%llu,\"file_rename\":%llu,\"net_state\":%llu,\"uid_change\":%llu,\"capset\":%llu}",
+        p->executable_resolved ? "true" : "false",
         p->security_score >= SECURITY_SCORE_THRESHOLD ? "true" : "false",
         p->exit_seen ? "true" : "false",
         p->sampled_this_window ? "true" : "false",
         p->window.process_exec, p->window.process_exit, p->window.syscall_events, p->window.file_write_events, p->window.file_write_bytes, p->window.file_create, p->window.file_delete, p->window.file_rename, p->window.net_state, p->window.uid_change, p->window.capset) < 0) return -1;
+    if (append_json(out, out_sz, used, ",\"security_facts\":[") < 0)
+        return -1;
+    for (size_t fact_index = 0;
+         fact_index < p->security_fact_count; fact_index++) {
+        const struct collected_security_fact *fact =
+            &p->security_facts[fact_index];
+        if (fact_index != 0 && append_json(out, out_sz, used, ",") < 0)
+            return -1;
+        if (append_json(out, out_sz, used, "{\"type\":") < 0 ||
+            append_json_escaped(out, out_sz, used,
+                                security_fact_name(fact->type)) < 0 ||
+            append_json(out, out_sz, used,
+                        ",\"count\":%llu,\"first_observed_ns\":%llu,"
+                        "\"last_observed_ns\":%llu,\"target_pid\":",
+                        fact->count, fact->first_observed_ns,
+                        fact->last_observed_ns) < 0)
+            return -1;
+        if (fact->target_pid_present) {
+            if (append_json(out, out_sz, used, "%u", fact->target_pid) < 0)
+                return -1;
+        } else if (append_json(out, out_sz, used, "null") < 0) {
+            return -1;
+        }
+        if (append_json(out, out_sz, used, ",\"path\":") < 0)
+            return -1;
+        if (fact->path_present) {
+            if (append_json_escaped(out, out_sz, used, fact->path) < 0)
+                return -1;
+        } else if (append_json(out, out_sz, used, "null") < 0) {
+            return -1;
+        }
+        if (append_json(out, out_sz, used, "}") < 0)
+            return -1;
+    }
+    if (append_json(out, out_sz, used,
+                    "],\"security_fact_overflow\":%llu",
+                    p->security_fact_overflow) < 0)
+        return -1;
     if (p->sampled_this_window) {
         if (append_json(out, out_sz, used, ",\"resources\":{\"cpu_utilization\":%.6f,\"memory_bytes\":%llu,\"io_bytes_per_sec\":%.3f}",
             p->window_cpu_utilization, p->window_memory_bytes,
@@ -674,6 +744,9 @@ static void reset_process_windows(void) {
          */
 
         p->security_score = 0;
+        memset(p->security_facts, 0, sizeof(p->security_facts));
+        p->security_fact_count = 0;
+        p->security_fact_overflow = 0;
         p->selected_for_output = 0;
         p->sampled_this_window = 0;
         p->resource_sample_attempted = 0;
@@ -773,6 +846,165 @@ static int syscall_is_high_signal(unsigned long long nr)
     return 0;
 }
 
+static const char *security_fact_name(enum collected_security_fact_type type)
+{
+    switch (type) {
+    case SECURITY_FACT_PTRACE_ATTEMPT:
+        return "PTRACE_ATTEMPT";
+    case SECURITY_FACT_PROCESS_VM_WRITEV_ATTEMPT:
+        return "PROCESS_VM_WRITEV_ATTEMPT";
+    case SECURITY_FACT_MEMFD_CREATE_ATTEMPT:
+        return "MEMFD_CREATE_ATTEMPT";
+    case SECURITY_FACT_SETNS_ATTEMPT:
+        return "SETNS_ATTEMPT";
+    case SECURITY_FACT_UNSHARE_ATTEMPT:
+        return "UNSHARE_ATTEMPT";
+    case SECURITY_FACT_UID_OR_GID_CHANGE_ATTEMPT:
+        return "UID_OR_GID_CHANGE_ATTEMPT";
+    case SECURITY_FACT_CAPSET_ATTEMPT:
+        return "CAPSET_ATTEMPT";
+    case SECURITY_FACT_CREDENTIAL_PATH_MUTATION_ATTEMPT:
+        return "CREDENTIAL_PATH_MUTATION_ATTEMPT";
+    case SECURITY_FACT_PERSISTENCE_PATH_WRITE_ATTEMPT:
+        return "PERSISTENCE_PATH_WRITE_ATTEMPT";
+    case SECURITY_FACT_PROTECTED_AGENT_PATH_WRITE_ATTEMPT:
+        return "PROTECTED_AGENT_PATH_WRITE_ATTEMPT";
+    case SECURITY_FACT_DESTRUCTIVE_FILE_ACTIVITY_ATTEMPT:
+        return "DESTRUCTIVE_FILE_ACTIVITY_ATTEMPT";
+    default:
+        return "UNKNOWN";
+    }
+}
+
+static int path_has_prefix(const char *path, const char *prefix)
+{
+    size_t length;
+
+    if (!path || !prefix)
+        return 0;
+    length = strlen(prefix);
+    if (strncmp(path, prefix, length) != 0)
+        return 0;
+    return prefix[length - 1U] == '/' || path[length] == '\0' ||
+        path[length] == '/';
+}
+
+static enum collected_security_fact_type security_fact_for_path(
+    const char *path
+)
+{
+    if (!path || path[0] != '/')
+        return 0;
+    if (path_has_prefix(path, "/etc/linux-security-agent") ||
+        path_has_prefix(path, "/var/lib/linux-security-agent") ||
+        path_has_prefix(path, "/usr/lib/linux-security-agent") ||
+        path_has_prefix(path, "/run/linux-security-agent"))
+        return SECURITY_FACT_PROTECTED_AGENT_PATH_WRITE_ATTEMPT;
+    if (strcmp(path, "/etc/shadow") == 0 ||
+        strcmp(path, "/etc/passwd") == 0 ||
+        strcmp(path, "/etc/group") == 0 ||
+        strcmp(path, "/etc/gshadow") == 0 ||
+        strcmp(path, "/etc/sudoers") == 0 ||
+        path_has_prefix(path, "/etc/sudoers.d") ||
+        strstr(path, "/.ssh/authorized_keys") != NULL)
+        return SECURITY_FACT_CREDENTIAL_PATH_MUTATION_ATTEMPT;
+    if (path_has_prefix(path, "/etc/systemd/system") ||
+        path_has_prefix(path, "/usr/lib/systemd/system") ||
+        path_has_prefix(path, "/etc/cron.d") ||
+        path_has_prefix(path, "/etc/cron.daily") ||
+        path_has_prefix(path, "/var/spool/cron") ||
+        strcmp(path, "/etc/rc.local") == 0 ||
+        strcmp(path, "/etc/ld.so.preload") == 0)
+        return SECURITY_FACT_PERSISTENCE_PATH_WRITE_ATTEMPT;
+    return 0;
+}
+
+static enum collected_security_fact_type security_fact_for_syscall(
+    unsigned long long nr
+)
+{
+#ifdef __NR_ptrace
+    if (nr == (unsigned long long)__NR_ptrace)
+        return SECURITY_FACT_PTRACE_ATTEMPT;
+#endif
+#ifdef __NR_process_vm_writev
+    if (nr == (unsigned long long)__NR_process_vm_writev)
+        return SECURITY_FACT_PROCESS_VM_WRITEV_ATTEMPT;
+#endif
+#ifdef __NR_memfd_create
+    if (nr == (unsigned long long)__NR_memfd_create)
+        return SECURITY_FACT_MEMFD_CREATE_ATTEMPT;
+#endif
+#ifdef __NR_setns
+    if (nr == (unsigned long long)__NR_setns)
+        return SECURITY_FACT_SETNS_ATTEMPT;
+#endif
+#ifdef __NR_unshare
+    if (nr == (unsigned long long)__NR_unshare)
+        return SECURITY_FACT_UNSHARE_ATTEMPT;
+#endif
+#ifdef TELEMETRY_UNIT_TEST
+    if (nr == TELEMETRY_TEST_HIGH_SIGNAL_SYSCALL)
+        return SECURITY_FACT_PTRACE_ATTEMPT;
+#endif
+    return 0;
+}
+
+static void record_security_fact(
+    struct process_state *process,
+    enum collected_security_fact_type type,
+    unsigned long long observed_ns,
+    int target_pid_present,
+    unsigned int target_pid,
+    const char *path
+)
+{
+    size_t i;
+    int path_present = path && path[0] != '\0';
+
+    if (!process || type == 0)
+        return;
+    for (i = 0; i < process->security_fact_count; i++) {
+        struct collected_security_fact *fact = &process->security_facts[i];
+        if (fact->type != type ||
+            fact->target_pid_present != target_pid_present ||
+            (target_pid_present && fact->target_pid != target_pid) ||
+            fact->path_present != path_present ||
+            (path_present && strcmp(fact->path, path) != 0))
+            continue;
+        fact->count++;
+        fact->last_observed_ns = observed_ns;
+        return;
+    }
+    if (process->security_fact_count >= MAX_SECURITY_FACTS_PER_PROCESS) {
+        process->security_fact_overflow++;
+        return;
+    }
+    {
+        struct collected_security_fact *fact =
+            &process->security_facts[process->security_fact_count++];
+        memset(fact, 0, sizeof(*fact));
+        fact->type = type;
+        fact->count = 1;
+        fact->first_observed_ns = observed_ns;
+        fact->last_observed_ns = observed_ns;
+        fact->target_pid_present = target_pid_present;
+        fact->target_pid = target_pid;
+        fact->path_present = path_present;
+        if (path_present)
+            (void)snprintf(fact->path, sizeof(fact->path), "%s", path);
+    }
+}
+
+static void record_path_fact(struct process_state *process,
+                             unsigned long long observed_ns,
+                             const char *path)
+{
+    enum collected_security_fact_type type = security_fact_for_path(path);
+    if (type != 0)
+        record_security_fact(process, type, observed_ns, 0, 0, path);
+}
+
 static void process_event(const struct telemetry_event *e) {
     if (!e) return;
     struct process_state *p = get_process_for_event(e);
@@ -793,6 +1025,16 @@ static void process_event(const struct telemetry_event *e) {
                 unsigned long long nr = e->data.syscall.syscall_id;
                 if (syscall_is_high_signal(nr))
                     p->security_score += SECURITY_WEIGHT_HIGH_SIGNAL;
+                {
+                    enum collected_security_fact_type type =
+                        security_fact_for_syscall(nr);
+                    int has_target = type == SECURITY_FACT_PTRACE_ATTEMPT ||
+                        type == SECURITY_FACT_PROCESS_VM_WRITEV_ATTEMPT;
+                    record_security_fact(p, type, e->h.timestamp_ns,
+                                         has_target,
+                                         (unsigned int)e->data.syscall.arg0,
+                                         NULL);
+                }
             }
             break;
         case EVENT_FILE_WRITE:
@@ -806,15 +1048,40 @@ static void process_event(const struct telemetry_event *e) {
             break;
         case EVENT_FILE_CREATE:
             counters.file_create++;
-            if (p) p->window.file_create++;
+            if (p) {
+                p->window.file_create++;
+                record_path_fact(p, e->h.timestamp_ns,
+                                 e->data.file_create.path);
+            }
             break;
         case EVENT_FILE_DELETE:
             counters.file_delete++;
-            if (p) { p->window.file_delete++; p->security_score += SECURITY_WEIGHT_FILE_DELETE; }
+            if (p) {
+                p->window.file_delete++;
+                p->security_score += SECURITY_WEIGHT_FILE_DELETE;
+                record_security_fact(
+                    p, SECURITY_FACT_DESTRUCTIVE_FILE_ACTIVITY_ATTEMPT,
+                    e->h.timestamp_ns, 0, 0, e->data.file_delete.path);
+                record_path_fact(p, e->h.timestamp_ns,
+                                 e->data.file_delete.path);
+            }
             break;
         case EVENT_FILE_RENAME:
             counters.file_rename++;
-            if (p) { p->window.file_rename++; p->security_score += SECURITY_WEIGHT_FILE_RENAME; }
+            if (p) {
+                const char *path = e->data.file_rename.new_path[0] ?
+                    e->data.file_rename.new_path :
+                    e->data.file_rename.old_path;
+                p->window.file_rename++;
+                p->security_score += SECURITY_WEIGHT_FILE_RENAME;
+                record_security_fact(
+                    p, SECURITY_FACT_DESTRUCTIVE_FILE_ACTIVITY_ATTEMPT,
+                    e->h.timestamp_ns, 0, 0, path);
+                record_path_fact(p, e->h.timestamp_ns,
+                                 e->data.file_rename.old_path);
+                record_path_fact(p, e->h.timestamp_ns,
+                                 e->data.file_rename.new_path);
+            }
             break;
         case EVENT_NET_STATE:
             counters.net_state++;
@@ -822,11 +1089,22 @@ static void process_event(const struct telemetry_event *e) {
             break;
         case EVENT_UID_CHANGE:
             counters.uid_change++;
-            if (p) { p->window.uid_change++; p->security_score += SECURITY_WEIGHT_UID_CHANGE; }
+            if (p) {
+                p->window.uid_change++;
+                p->security_score += SECURITY_WEIGHT_UID_CHANGE;
+                record_security_fact(
+                    p, SECURITY_FACT_UID_OR_GID_CHANGE_ATTEMPT,
+                    e->h.timestamp_ns, 0, 0, NULL);
+            }
             break;
         case EVENT_CAPSET:
             counters.capset++;
-            if (p) { p->window.capset++; p->security_score += SECURITY_WEIGHT_CAPSET; }
+            if (p) {
+                p->window.capset++;
+                p->security_score += SECURITY_WEIGHT_CAPSET;
+                record_security_fact(p, SECURITY_FACT_CAPSET_ATTEMPT,
+                                     e->h.timestamp_ns, 0, 0, NULL);
+            }
             break;
         default: break;
     }

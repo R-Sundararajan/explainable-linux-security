@@ -147,7 +147,10 @@ static void test_short_lived_sensitive_write_survives_exit(void)
 static void test_security_sensitive_low_volume_is_meaningful(void)
 {
     struct process_output_stats stats;
+    struct telemetry_socket_stats ipc = {0};
     struct telemetry_event event;
+    char json[JSON_BUFFER_SIZE];
+    struct process_state *process;
 
     reset_test_state();
 
@@ -157,7 +160,21 @@ static void test_security_sensitive_low_volume_is_meaningful(void)
     process_event(&event);
     event = make_event(EVENT_SYSCALL, 120002U, 3000002ULL, "ptrace");
     event.data.syscall.syscall_id = TELEMETRY_TEST_HIGH_SIGNAL_SYSCALL;
+    event.data.syscall.arg0 = 4242;
     process_event(&event);
+
+    process = find_proc(120000U, 3000000ULL);
+    assert(process->security_fact_count == 1);
+    assert(process->security_facts[0].type == SECURITY_FACT_CAPSET_ATTEMPT);
+    process = find_proc(120001U, 3000001ULL);
+    assert(process->security_fact_count == 1);
+    assert(process->security_facts[0].type ==
+           SECURITY_FACT_UID_OR_GID_CHANGE_ATTEMPT);
+    process = find_proc(120002U, 3000002ULL);
+    assert(process->security_fact_count == 1);
+    assert(process->security_facts[0].type == SECURITY_FACT_PTRACE_ATTEMPT);
+    assert(process->security_facts[0].target_pid_present);
+    assert(process->security_facts[0].target_pid == 4242);
 
     assert(process_warrants_priority_resource_sample(
         find_proc(120000U, 3000000ULL)));
@@ -170,6 +187,12 @@ static void test_security_sensitive_low_volume_is_meaningful(void)
     assert(find_proc(120000U, 3000000ULL)->selected_for_output);
     assert(find_proc(120001U, 3000001ULL)->selected_for_output);
     assert(find_proc(120002U, 3000002ULL)->selected_for_output);
+    assert(build_host_window_json_batch(json, sizeof(json), "host", 1,
+                                        4000000ULL, 0, &ipc, &stats, 0) == 0);
+    assert(strstr(json, "\"type\":\"CAPSET_ATTEMPT\"") != NULL);
+    assert(strstr(json, "\"type\":\"UID_OR_GID_CHANGE_ATTEMPT\"") != NULL);
+    assert(strstr(json, "\"type\":\"PTRACE_ATTEMPT\"") != NULL);
+    assert(strstr(json, "\"target_pid\":4242") != NULL);
 }
 
 static void test_single_file_and_network_events_are_meaningful(void)
@@ -188,11 +211,15 @@ static void test_single_file_and_network_events_are_meaningful(void)
     (void)snprintf(event.data.file_create.path,
                    sizeof(event.data.file_create.path), "/etc/sudoers.d/a");
     process_event(&event);
+    assert(find_proc(121001U, 3100001ULL)->security_facts[0].type ==
+           SECURITY_FACT_CREDENTIAL_PATH_MUTATION_ATTEMPT);
 
     event = make_event(EVENT_FILE_DELETE, 121002U, 3100002ULL, "delete");
     (void)snprintf(event.data.file_delete.path,
                    sizeof(event.data.file_delete.path), "/etc/ssh/sshd_config");
     process_event(&event);
+    assert(find_proc(121002U, 3100002ULL)->security_facts[0].type ==
+           SECURITY_FACT_DESTRUCTIVE_FILE_ACTIVITY_ATTEMPT);
 
     event = make_event(EVENT_FILE_RENAME, 121003U, 3100003ULL, "rename");
     (void)snprintf(event.data.file_rename.old_path,
@@ -200,6 +227,11 @@ static void test_single_file_and_network_events_are_meaningful(void)
     (void)snprintf(event.data.file_rename.new_path,
                    sizeof(event.data.file_rename.new_path), "/etc/passwd");
     process_event(&event);
+    assert(find_proc(121003U, 3100003ULL)->security_fact_count == 2);
+    assert(find_proc(121003U, 3100003ULL)->security_facts[0].type ==
+           SECURITY_FACT_DESTRUCTIVE_FILE_ACTIVITY_ATTEMPT);
+    assert(find_proc(121003U, 3100003ULL)->security_facts[1].type ==
+           SECURITY_FACT_CREDENTIAL_PATH_MUTATION_ATTEMPT);
 
     event = make_event(EVENT_NET_STATE, 121004U, 3100004ULL, "network");
     process_event(&event);

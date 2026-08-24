@@ -13,7 +13,35 @@
 #define FE_PROCESS_ID_LEN 128U
 #define FE_COMM_LEN 64U
 #define FE_EXE_LEN 512U
+#define FE_SECURITY_FACT_PATH_LEN 192U
+#define FE_MAX_SECURITY_FACTS 12U
 #define FE_MAX_PROCESSES 64U
+
+typedef enum {
+    FE_SECURITY_FACT_UNKNOWN = 0,
+    FE_SECURITY_FACT_PTRACE_ATTEMPT,
+    FE_SECURITY_FACT_PROCESS_VM_WRITEV_ATTEMPT,
+    FE_SECURITY_FACT_MEMFD_CREATE_ATTEMPT,
+    FE_SECURITY_FACT_SETNS_ATTEMPT,
+    FE_SECURITY_FACT_UNSHARE_ATTEMPT,
+    FE_SECURITY_FACT_UID_OR_GID_CHANGE_ATTEMPT,
+    FE_SECURITY_FACT_CAPSET_ATTEMPT,
+    FE_SECURITY_FACT_CREDENTIAL_PATH_MUTATION_ATTEMPT,
+    FE_SECURITY_FACT_PERSISTENCE_PATH_WRITE_ATTEMPT,
+    FE_SECURITY_FACT_PROTECTED_AGENT_PATH_WRITE_ATTEMPT,
+    FE_SECURITY_FACT_DESTRUCTIVE_FILE_ACTIVITY_ATTEMPT
+} fe_security_fact_type_t;
+
+typedef struct {
+    fe_security_fact_type_t type;
+    uint64_t count;
+    uint64_t first_observed_ns;
+    uint64_t last_observed_ns;
+    uint32_t target_pid;
+    bool target_pid_present;
+    char path[FE_SECURITY_FACT_PATH_LEN];
+    bool path_present;
+} fe_security_fact_t;
 
 typedef enum {
     F01_SYSCALL_RATE = 0,
@@ -89,6 +117,7 @@ typedef struct {
     char process_instance_id[FE_PROCESS_ID_LEN];
     char comm[FE_COMM_LEN];
     char exe[FE_EXE_LEN];
+    bool executable_resolved;
     bool exit_seen;
     fe_activity_t activity;
     double cpu_utilization;
@@ -96,6 +125,9 @@ typedef struct {
     double io_bytes_per_sec;
     bool resources_present;
     bool resource_sample_fresh;
+    size_t security_fact_count;
+    uint64_t security_fact_overflow;
+    fe_security_fact_t security_facts[FE_MAX_SECURITY_FACTS];
 } fe_process_record_t;
 
 typedef struct {
@@ -107,8 +139,20 @@ typedef struct {
     fe_activity_t host_activity;
     uint64_t ringbuf_drops;
     uint64_t ipc_drops;
+    uint64_t ipc_no_consumer;
+    uint64_t ipc_backpressure_drops;
+    uint64_t ipc_disconnect_drops;
+    uint64_t ipc_send_error_drops;
+    uint64_t ipc_partial_write_drops;
+    uint64_t ipc_rejected_clients;
+    uint64_t process_state_attribution_drops;
     uint64_t process_records_emitted;
     uint64_t process_records_suppressed;
+    uint64_t process_records_filtered_low_signal;
+    uint64_t batch_index;
+    uint64_t batch_count;
+    uint64_t records_in_batch;
+    uint64_t max_records_per_batch;
     bool quality_present;
     size_t process_count;
     fe_process_record_t processes[FE_MAX_PROCESSES];

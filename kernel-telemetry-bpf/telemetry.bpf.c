@@ -135,6 +135,7 @@ int on_sys_enter(struct trace_event_raw_sys_enter *ctx)
         return 0;
 
     e->data.syscall.syscall_id = ctx->id;
+    e->data.syscall.arg0 = ctx->args[0];
     bpf_ringbuf_submit(e, 0);
     return 0;
 }
