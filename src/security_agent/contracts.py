@@ -391,6 +391,12 @@ class SecurityCase(StrictFrozenModel):
     anomaly_peak: Annotated[float, Field(ge=0)]
     threshold_crossings: Annotated[int, Field(ge=0, le=MAX_CASE_OBSERVATIONS)]
     quality: CaseQuality
+    latest_features: FeatureSet
+    activity_totals: ActivityCounters
+    latest_host_activity: ActivityCounters
+    latest_resources: ResourceEvidence
+    latest_telemetry_quality: TelemetryQuality
+    security_fact_overflow: UInt64
     mature_for_reasoning: bool
 
 
@@ -492,6 +498,20 @@ class ModelHypothesis(StrictFrozenModel):
         return self
 
 
+class ModelClassProbability(StrictFrozenModel):
+    label: ModelVerdict
+    probability: Annotated[float, Field(ge=0, le=1)]
+
+
+class ModelFeatureInfluence(StrictFrozenModel):
+    feature: FeatureName
+    value: float
+    influence: float
+    supporting_evidence_ids: tuple[Identifier, ...] = Field(
+        max_length=MAX_CASE_OBSERVATIONS
+    )
+
+
 class ModelAssessment(StrictFrozenModel):
     assessment_id: Identifier
     case_id: Identifier
@@ -513,6 +533,14 @@ class ModelAssessment(StrictFrozenModel):
     reasoning_summary: Annotated[
         str, StringConstraints(min_length=1, max_length=1_023)
     ]
+    probabilities: tuple[ModelClassProbability, ...] = Field(default=(), max_length=3)
+    confidence: Annotated[float, Field(ge=0, le=1)] | None = None
+    feature_schema_version: Annotated[
+        str, StringConstraints(min_length=1, max_length=63)
+    ] | None = None
+    feature_influences: tuple[ModelFeatureInfluence, ...] = Field(
+        default=(), max_length=8
+    )
 
     @model_validator(mode="after")
     def unique_references(self) -> "ModelAssessment":
@@ -526,6 +554,23 @@ class ModelAssessment(StrictFrozenModel):
             raise ValueError("evidence cannot both support and contradict the assessment")
         if len(self.missing_evidence) != len(set(self.missing_evidence)):
             raise ValueError("duplicate missing evidence code")
+        probability_labels = tuple(item.label for item in self.probabilities)
+        if len(probability_labels) != len(set(probability_labels)):
+            raise ValueError("duplicate model probability label")
+        if self.probabilities:
+            if set(probability_labels) != {
+                ModelVerdict.BENIGN,
+                ModelVerdict.SUSPICIOUS,
+                ModelVerdict.MALICIOUS,
+            }:
+                raise ValueError("model probabilities must cover all threat classes")
+            if abs(sum(item.probability for item in self.probabilities) - 1.0) > 1e-6:
+                raise ValueError("model probabilities must sum to one")
+            expected_confidence = max(item.probability for item in self.probabilities)
+            if self.confidence is None or abs(self.confidence - expected_confidence) > 1e-6:
+                raise ValueError("model confidence must equal the maximum probability")
+        elif self.confidence is not None or self.feature_influences:
+            raise ValueError("confidence and influences require class probabilities")
         return self
 
 
@@ -577,16 +622,18 @@ class ReasonerMetrics(StrictFrozenModel):
     peak_incremental_rss_bytes: UInt64
     peak_processes: Annotated[int, Field(ge=0, le=16)]
     cpu_seconds: Annotated[float, Field(ge=0)] = 0.0
+    feature_construction_ms: Annotated[float, Field(ge=0)] = 0.0
+    inference_ms: Annotated[float, Field(ge=0)] = 0.0
 
 
 class ReasonerProvenance(StrictFrozenModel):
-    provider: Literal["local-subprocess"]
+    provider: Literal["local-subprocess", "local-tabular-ml"]
     backend_id: Annotated[str, StringConstraints(min_length=1, max_length=127)]
     model_id: Annotated[str, StringConstraints(min_length=1, max_length=255)]
     model_sha256: Annotated[
         str, StringConstraints(pattern=r"^[0-9a-f]{64}$")
     ] | None
-    sandbox: Literal["bubblewrap"]
+    sandbox: Literal["bubblewrap", "in-process-pinned-artifact"]
 
 
 class ReasonerOutcome(StrictFrozenModel):
@@ -627,6 +674,14 @@ class ModelInterpretation(StrictFrozenModel):
     reasoning_summary: Annotated[
         str, StringConstraints(min_length=1, max_length=1_023)
     ]
+    probabilities: tuple[ModelClassProbability, ...] = Field(default=(), max_length=3)
+    confidence: Annotated[float, Field(ge=0, le=1)] | None = None
+    feature_schema_version: Annotated[
+        str, StringConstraints(min_length=1, max_length=63)
+    ] | None = None
+    feature_influences: tuple[ModelFeatureInfluence, ...] = Field(
+        default=(), max_length=8
+    )
 
 
 class SecurityExplanation(StrictFrozenModel):

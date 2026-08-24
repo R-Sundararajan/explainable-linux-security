@@ -12,6 +12,7 @@ from .contracts import (
     ProcessEvidence,
     SecurityCase,
     SecurityFactType,
+    ActivityCounters,
 )
 
 
@@ -74,6 +75,22 @@ def build_security_case(evidences: Sequence[ProcessEvidence]) -> SecurityCase:
     observations_with_loss = 0
     observations_without_quality = 0
     total_transport_loss = 0
+    activity_fields = (
+        "process_exec",
+        "process_exit",
+        "syscall_events",
+        "file_write_events",
+        "file_write_bytes",
+        "file_create",
+        "file_delete",
+        "file_rename",
+        "net_state",
+        "uid_change",
+        "capset",
+    )
+    activity_totals = {field: 0 for field in activity_fields}
+    activity_valid_mask = 0
+    security_fact_overflow = 0
 
     previous_end = -1
     for evidence in evidences:
@@ -124,6 +141,10 @@ def build_security_case(evidences: Sequence[ProcessEvidence]) -> SecurityCase:
         if not evidence.telemetry_quality.present:
             observations_without_quality += 1
         total_transport_loss += loss
+        activity_valid_mask |= evidence.activity.valid_mask
+        for field in activity_fields:
+            activity_totals[field] += getattr(evidence.activity, field)
+        security_fact_overflow += evidence.security_fact_overflow
         observations.append(
             CaseObservation(
                 evidence_id=evidence.evidence_id,
@@ -191,5 +212,14 @@ def build_security_case(evidences: Sequence[ProcessEvidence]) -> SecurityCase:
             observations_without_quality=observations_without_quality,
             total_transport_loss=total_transport_loss,
         ),
+        latest_features=latest.features,
+        activity_totals=ActivityCounters(
+            valid_mask=activity_valid_mask,
+            **activity_totals,
+        ),
+        latest_host_activity=latest.host_activity,
+        latest_resources=latest.resources,
+        latest_telemetry_quality=latest.telemetry_quality,
+        security_fact_overflow=security_fact_overflow,
         mature_for_reasoning=mature_for_reasoning,
     )
